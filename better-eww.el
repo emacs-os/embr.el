@@ -489,6 +489,27 @@ This does NOT remove the Emacs package itself — use your package manager for t
   (kill-new better-eww--current-url)
   (message "Copied: %s" better-eww--current-url))
 
+;; ── Resolution toggle ─────────────────────────────────────────────
+
+(defvar better-eww--resolutions
+  '((393 . 852) (1280 . 720) (1920 . 1080))
+  "List of (width . height) pairs to cycle through.")
+
+(defun better-eww-cycle-resolution ()
+  "Cycle viewport through 720p → 1080p → 1440p → 4K."
+  (interactive)
+  (let* ((current (cons better-eww--viewport-width better-eww--viewport-height))
+         (pos (cl-position current better-eww--resolutions :test #'equal))
+         (next (nth (mod (1+ (or pos -1)) (length better-eww--resolutions))
+                    better-eww--resolutions)))
+    (setq better-eww--viewport-width (car next)
+          better-eww--viewport-height (cdr next))
+    (better-eww--send `((cmd . "resize")
+                         (width . ,(car next))
+                         (height . ,(cdr next)))
+                       #'better-eww--action-callback)
+    (message "Viewport: %dx%d" (car next) (cdr next))))
+
 ;; ── External player ───────────────────────────────────────────────
 
 (defun better-eww-play-external ()
@@ -723,6 +744,7 @@ This does NOT remove the Emacs package itself — use your package manager for t
       (define-key map (vector c) #'better-eww-self-insert))
     ;; Override & for external player (like eww).
     (define-key map (kbd "&") #'better-eww-play-external)
+    (define-key map (kbd "<f5>") #'better-eww-cycle-resolution)
     ;; Special keys → forward to browser.
     (dolist (key '("<return>" "<backspace>" "<tab>" "<delete>"
                    "<home>" "<end>" "<up>" "<down>" "<left>" "<right>"

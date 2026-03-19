@@ -135,6 +135,7 @@ All keys are forwarded directly to the browser. Typing, arrows, backspace, tab, 
 | `C-v` | Page down |
 | `M-v` | Page up |
 | `&` | Play URL with yt-dlp + mpv (like eww's `&`) |
+| `F5` | Cycle viewport: iPhone → 720p → 1080p (Emacs handles up to 1080p well, higher loses perf) |
 | `C-x` | Emacs prefix (not forwarded) |
 | `M-x` | Emacs command (not forwarded) |
 | `C-c` | Browser command prefix (see below) |
