@@ -4,7 +4,7 @@
 ;; Version: 0.2.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: web, browser
-;; URL: https://github.com/user/embr
+;; URL: https://github.com/emacs-os/embr.el
 
 ;;; Commentary:
 

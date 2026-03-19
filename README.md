@@ -22,7 +22,7 @@ Emacs is the display server. Headless Firefox is the renderer.
 (use-package embr
   :defer t
   :ensure (:host github
-           :repo "emacs-os/embr"
+           :repo "emacs-os/embr.el"
            :files ("*.el" "*.py" "*.sh"))
   :config
   (setq embr-fps 30
@@ -38,7 +38,7 @@ Emacs is the display server. Headless Firefox is the renderer.
 (use-package embr
   :defer t
   :straight (:host github
-             :repo "emacs-os/embr"
+             :repo "emacs-os/embr.el"
              :files ("*.el" "*.py" "*.sh"))
   :config
   (setq embr-fps 30
@@ -54,7 +54,7 @@ Emacs is the display server. Headless Firefox is the renderer.
 ### Manual
 
 ```bash
-git clone https://github.com/emacs-os/embr.git
+git clone https://github.com/emacs-os/embr.el.git
 cd embr
 bash setup.sh
 ```
