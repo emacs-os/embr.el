@@ -29,6 +29,8 @@ Emacs is the display server. Headless Firefox is the renderer.
         embr-default-width 1280         ; Viewport width in pixels
         embr-default-height 720         ; Viewport height in pixels
         embr-search-engine 'brave       ; 'brave, 'google, 'duckduckgo, or custom URL with %s
+        embr-click-method 'default      ; 'default or 'atomic (see Configuration below)
+        embr-scroll-method 'default     ; 'default or 'smooth (see Configuration below)
         embr-external-player "mpv"))    ; Media player for & key (receives yt-dlp output via pipe)
 ```
 
@@ -46,6 +48,8 @@ Emacs is the display server. Headless Firefox is the renderer.
         embr-default-width 1280         ; Viewport width in pixels
         embr-default-height 720         ; Viewport height in pixels
         embr-search-engine 'brave       ; 'brave, 'google, 'duckduckgo, or custom URL with %s
+        embr-click-method 'default      ; 'default or 'atomic (see Configuration below)
+        embr-scroll-method 'default     ; 'default or 'smooth (see Configuration below)
         embr-external-player "mpv"))    ; Media player for & key (receives yt-dlp output via pipe)
 ```
 
@@ -80,6 +84,32 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 | Cookies & sessions | `~/.local/share/embr/firefox-profile/` |
 
 `M-x embr-uninstall` cleans up all of the above.
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `embr-fps` | `30` | Target frames per second |
+| `embr-default-width` | `1280` | Viewport width in pixels |
+| `embr-default-height` | `720` | Viewport height in pixels |
+| `embr-search-engine` | `'brave` | `'brave`, `'google`, `'duckduckgo`, or custom URL with `%s` |
+| `embr-click-method` | `'default` | Click dispatch method (see below) |
+| `embr-scroll-method` | `'default` | Scroll behavior (see below) |
+| `embr-external-player` | `"mpv"` | Media player for `&` key (receives yt-dlp output via pipe) |
+
+### Click methods
+
+| Method | Behavior |
+|--------|----------|
+| `'default` | Sends mousedown immediately on press, mouseup on release. Standard behavior, works everywhere. |
+| `'atomic` | Defers mousedown until drag is detected. Simple clicks use Playwright's atomic `page.mouse.click()`. Better compatibility with iframe widgets like Cloudflare Turnstile checkboxes. |
+
+### Scroll methods
+
+| Method | Behavior |
+|--------|----------|
+| `'default` | 100px instant scroll per wheel tick. Choppy, line-by-line feel. |
+| `'smooth` | 300px smooth-animated scroll per wheel tick. |
 
 ## Usage
 

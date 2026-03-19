@@ -35,6 +35,10 @@ First line of output is `{"ok": true}`, second is a JSON object with `screenshot
 M-x embr-browse RET https://example.com RET
 ```
 
+## README Convention
+
+The use-package blocks in the README (Elpaca and straight.el) must always list every `defcustom` configuration option with its default value. This gives users copy-paste-ready config with all knobs visible. When adding a new `defcustom`, always add it to both use-package blocks and the Configuration table in the README.
+
 ## Key Conventions
 
 - Python daemon: async (`asyncio`), single-file, no classes — just `async def handle()` with a flat if/elif command dispatch. Stdout is exclusively for JSON responses; all logging/errors from Playwright go to stderr.

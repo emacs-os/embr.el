@@ -63,6 +63,22 @@ alongside the .el in the builds dir, so this just works.")
 The current URL is piped through yt-dlp and into this player."
   :type 'string)
 
+(defcustom embr-click-method 'default
+  "How mouse clicks are sent to the browser.
+`default' sends separate mousedown/mouseup events (standard behavior).
+`atomic' defers mousedown until drag is detected and uses Playwright's
+atomic click for simple clicks — better compatibility with iframe widgets
+like Cloudflare Turnstile."
+  :type '(choice (const :tag "Default (mousedown/mouseup)" default)
+                 (const :tag "Atomic (single click call)" atomic)))
+
+(defcustom embr-scroll-method 'default
+  "How scrolling behaves.
+`default' scrolls 100px instantly (choppy, line-by-line feel).
+`smooth' scrolls 300px with CSS smooth behavior."
+  :type '(choice (const :tag "Default (100px instant)" default)
+                 (const :tag "Smooth (300px smooth)" smooth)))
+
 (defcustom embr-search-engine 'brave
   "Search engine for URL bar queries.
 Can be a symbol (`brave', `google', `duckduckgo') or a custom URL
@@ -345,8 +361,15 @@ This does NOT remove the Emacs package itself — use your package manager for t
     (kill-buffer embr--buffer)))
 
 (defun embr-mouse-handler (event)
-  "Handle mouse press, track drag, and forward to browser."
+  "Handle mouse press, track drag, and forward to browser.
+Dispatch method depends on `embr-click-method'."
   (interactive "e")
+  (pcase embr-click-method
+    ('atomic (embr--mouse-atomic event))
+    (_ (embr--mouse-default event))))
+
+(defun embr--mouse-default (event)
+  "Send mousedown immediately, then mouseup on release."
   (let* ((start-posn (event-start event))
          (start-xy (posn-object-x-y start-posn))
          (start-x (car start-xy))
@@ -364,7 +387,6 @@ This does NOT remove the Emacs package itself — use your package manager for t
                    (xy (posn-object-x-y posn)))
               (when xy
                 (setq end-x (car xy) end-y (cdr xy))))))
-        ;; Get final position from release event if available.
         (when (and ev (listp ev))
           (let* ((posn (event-end ev))
                  (xy (posn-object-x-y posn)))
@@ -372,6 +394,40 @@ This does NOT remove the Emacs package itself — use your package manager for t
               (setq end-x (car xy) end-y (cdr xy)))))
         (embr--send `((cmd . "mouseup") (x . ,end-x) (y . ,end-y))
                            #'embr--action-callback)))))
+
+(defun embr--mouse-atomic (event)
+  "Defer mousedown until drag is detected; use atomic click otherwise.
+Better compatibility with iframe widgets like Cloudflare Turnstile."
+  (let* ((start-posn (event-start event))
+         (start-xy (posn-object-x-y start-posn))
+         (start-x (car start-xy))
+         (start-y (cdr start-xy)))
+    (when (and start-x start-y)
+      (let ((end-x start-x)
+            (end-y start-y)
+            (dragged nil)
+            (ev nil))
+        (track-mouse
+          (while (progn
+                   (setq ev (read-event))
+                   (mouse-movement-p ev))
+            (let* ((posn (event-start ev))
+                   (xy (posn-object-x-y posn)))
+              (when xy
+                (unless dragged
+                  (setq dragged t)
+                  (embr--send `((cmd . "mousedown") (x . ,start-x) (y . ,start-y)) nil))
+                (setq end-x (car xy) end-y (cdr xy))))))
+        (when (and ev (listp ev))
+          (let* ((posn (event-end ev))
+                 (xy (posn-object-x-y posn)))
+            (when xy
+              (setq end-x (car xy) end-y (cdr xy)))))
+        (if dragged
+            (embr--send `((cmd . "mouseup") (x . ,end-x) (y . ,end-y))
+                               #'embr--action-callback)
+          (embr--send `((cmd . "click") (x . ,start-x) (y . ,start-y))
+                             #'embr--action-callback))))))
 
 (defun embr-double-click (event)
   "Handle double-click EVENT — select word in browser."
@@ -384,15 +440,29 @@ This does NOT remove the Emacs package itself — use your package manager for t
       (embr--send `((cmd . "dblclick") (x . ,x) (y . ,y))
                          #'embr--action-callback))))
 
+(defun embr--scroll-delta ()
+  "Return the scroll delta in pixels based on `embr-scroll-method'."
+  (pcase embr-scroll-method
+    ('smooth 300)
+    (_ 100)))
+
+(defun embr--scroll-behavior ()
+  "Return the scroll behavior string based on `embr-scroll-method'."
+  (pcase embr-scroll-method
+    ('smooth "smooth")
+    (_ "instant")))
+
 (defun embr-scroll-down (event)
   "Scroll down in the browser on mouse wheel EVENT."
   (interactive "e")
   (let* ((posn (event-start event))
          (xy (posn-object-x-y posn))
          (x (or (car xy) 0))
-         (y (or (cdr xy) 0)))
+         (y (or (cdr xy) 0))
+         (delta (embr--scroll-delta)))
     (embr--send `((cmd . "scroll") (x . ,x) (y . ,y)
-                         (delta_x . 0) (delta_y . 300))
+                         (delta_x . 0) (delta_y . ,delta)
+                         (behavior . ,(embr--scroll-behavior)))
                        #'embr--action-callback)))
 
 (defun embr-scroll-up (event)
@@ -401,9 +471,11 @@ This does NOT remove the Emacs package itself — use your package manager for t
   (let* ((posn (event-start event))
          (xy (posn-object-x-y posn))
          (x (or (car xy) 0))
-         (y (or (cdr xy) 0)))
+         (y (or (cdr xy) 0))
+         (delta (embr--scroll-delta)))
     (embr--send `((cmd . "scroll") (x . ,x) (y . ,y)
-                         (delta_x . 0) (delta_y . -300))
+                         (delta_x . 0) (delta_y . ,(- delta))
+                         (behavior . ,(embr--scroll-behavior)))
                        #'embr--action-callback)))
 
 (defun embr-zoom-in ()

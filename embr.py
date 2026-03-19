@@ -153,8 +153,9 @@ async def main():
         if cmd == "scroll":
             delta_x = params.get("delta_x", 0)
             delta_y = params.get("delta_y", 0)
+            behavior = params.get("behavior", "instant")
             await page.evaluate(
-                f"window.scrollBy({{left: {delta_x}, top: {delta_y}, behavior: 'smooth'}})"
+                f"window.scrollBy({{left: {delta_x}, top: {delta_y}, behavior: '{behavior}'}})"
             )
             return {"ok": True}
 
