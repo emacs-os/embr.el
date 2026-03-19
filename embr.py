@@ -30,6 +30,7 @@ def load_blocklist():
 async def main():
     from playwright.async_api import async_playwright
     from camoufox.async_api import AsyncNewBrowser
+    from browserforge.fingerprints import Screen
     pw = await async_playwright().start()
     context = None
     page = None
@@ -73,13 +74,17 @@ async def main():
         if cmd == "init":
             width = params.get("width", 1280)
             height = params.get("height", 720)
+            sw = params.get("screen_width", 1920)
+            sh = params.get("screen_height", 1080)
             context = await AsyncNewBrowser(
                 pw,
                 persistent_context=True,
                 user_data_dir=str(user_data_dir),
                 headless=True,
                 enable_cache=True,
-                viewport={"width": width, "height": height},
+                window=(width, height),
+                screen=Screen(max_width=sw, max_height=sh),
+                os="linux",
                 accept_downloads=False,
             )
             # Ad blocking via request interception.
@@ -101,117 +106,9 @@ async def main():
                         await route.continue_()
                 await context.route("**/*", block_ads)
             target_fps = params.get("fps", 30)
-            fullscreen_hack = params.get("fullscreen_hack", False)
             page = context.pages[0] if context.pages else await context.new_page()
-            # Hide automation fingerprint.
-            sw = params.get("screen_width", 1920)
-            sh = params.get("screen_height", 1080)
-            await context.add_init_script(f"""
-                Object.defineProperty(navigator, 'webdriver', {{get: () => undefined}});
-                Object.defineProperty(screen, 'width', {{get: () => {sw}}});
-                Object.defineProperty(screen, 'height', {{get: () => {sh}}});
-                Object.defineProperty(screen, 'availWidth', {{get: () => {sw}}});
-                Object.defineProperty(screen, 'availHeight', {{get: () => {sh}}});
-                Object.defineProperty(navigator, 'plugins', {{get: () => {{
-                    const p = {{0: {{type: 'application/pdf'}}, length: 1}};
-                    p[0].name = 'PDF Viewer';
-                    p[0].description = 'Portable Document Format';
-                    p[0].filename = 'internal-pdf-viewer';
-                    return p;
-                }}}});
-                Object.defineProperty(navigator, 'mimeTypes', {{get: () => {{
-                    return {{0: {{type: 'application/pdf', suffixes: 'pdf',
-                        description: 'Portable Document Format'}}, length: 1}};
-                }}}});
-            """)
-            if fullscreen_hack:
-                await context.add_init_script("""
-                    (function() {
-                        let fsEl = null;
-                        const saved = new Map();
-                        function enterFs(el) {
-                            fsEl = el;
-                            saved.set(el, el.getAttribute('style') || '');
-                            el.style.setProperty('position', 'fixed', 'important');
-                            el.style.setProperty('top', '0', 'important');
-                            el.style.setProperty('left', '0', 'important');
-                            el.style.setProperty('width', '100vw', 'important');
-                            el.style.setProperty('height', '100vh', 'important');
-                            el.style.setProperty('z-index', '2147483647', 'important');
-                            el.style.setProperty('background', '#000', 'important');
-                            const vid = el.querySelector('video');
-                            if (vid) {
-                                saved.set(vid, vid.getAttribute('style') || '');
-                                vid.style.setProperty('width', '100%', 'important');
-                                vid.style.setProperty('height', '100%', 'important');
-                                vid.style.setProperty('object-fit', 'contain', 'important');
-                            }
-                            const getFsEl = () => fsEl;
-                            Object.defineProperty(document, 'fullscreenElement', {
-                                get: getFsEl, configurable: true
-                            });
-                            Object.defineProperty(document, 'mozFullScreenElement', {
-                                get: getFsEl, configurable: true
-                            });
-                            Object.defineProperty(document, 'webkitFullscreenElement', {
-                                get: getFsEl, configurable: true
-                            });
-                            el.dispatchEvent(new Event('fullscreenchange', {bubbles: true}));
-                            document.dispatchEvent(new Event('fullscreenchange'));
-                            document.dispatchEvent(new Event('mozfullscreenchange'));
-                            document.dispatchEvent(new Event('webkitfullscreenchange'));
-                            return Promise.resolve();
-                        }
-                        function exitFs() {
-                            if (fsEl) {
-                                const origStyle = saved.get(fsEl);
-                                if (origStyle !== undefined) fsEl.setAttribute('style', origStyle);
-                                else fsEl.removeAttribute('style');
-                                const vid = fsEl.querySelector('video');
-                                if (vid) {
-                                    const vs = saved.get(vid);
-                                    if (vs !== undefined) vid.setAttribute('style', vs);
-                                    else vid.removeAttribute('style');
-                                }
-                                fsEl = null;
-                                const getNull = () => null;
-                                Object.defineProperty(document, 'fullscreenElement', {
-                                    get: getNull, configurable: true
-                                });
-                                Object.defineProperty(document, 'mozFullScreenElement', {
-                                    get: getNull, configurable: true
-                                });
-                                Object.defineProperty(document, 'webkitFullscreenElement', {
-                                    get: getNull, configurable: true
-                                });
-                                document.dispatchEvent(new Event('fullscreenchange'));
-                                document.dispatchEvent(new Event('mozfullscreenchange'));
-                                document.dispatchEvent(new Event('webkitfullscreenchange'));
-                            }
-                            return Promise.resolve();
-                        }
-                        // Standard
-                        Element.prototype.requestFullscreen = function() { return enterFs(this); };
-                        document.exitFullscreen = exitFs;
-                        // Mozilla
-                        Element.prototype.mozRequestFullScreen = function() { return enterFs(this); };
-                        document.mozCancelFullScreen = exitFs;
-                        // WebKit
-                        Element.prototype.webkitRequestFullscreen = function() { return enterFs(this); };
-                        Element.prototype.webkitRequestFullScreen = function() { return enterFs(this); };
-                        document.webkitExitFullscreen = exitFs;
-                        // Fullscreen enabled
-                        Object.defineProperty(document, 'fullscreenEnabled', {
-                            get: () => true, configurable: true
-                        });
-                        Object.defineProperty(document, 'mozFullScreenEnabled', {
-                            get: () => true, configurable: true
-                        });
-                        Object.defineProperty(document, 'webkitFullscreenEnabled', {
-                            get: () => true, configurable: true
-                        });
-                    })();
-                """)
+            # Force our exact viewport size (camoufox may derive a different one from its fingerprint).
+            await page.set_viewport_size({"width": width, "height": height})
             loop_task = asyncio.create_task(screenshot_loop())
             return {"ok": True, "frame_path": FRAME_PATH}
 
@@ -374,11 +271,6 @@ async def main():
                 await page.bring_to_front()
                 return {"ok": True}
             return {"error": f"tab index out of range: {idx}"}
-
-        if cmd == "resize":
-            w, h = params["width"], params["height"]
-            await page.set_viewport_size({"width": w, "height": h})
-            return {"ok": True}
 
         if cmd == "quit":
             running = False

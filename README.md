@@ -26,8 +26,7 @@ Emacs is the display server. Headless Firefox is the renderer.
         embr-screen-height 1080         ; Screen height reported to websites
         embr-search-engine 'brave       ; 'brave, 'google, 'duckduckgo, or custom URL with %s
         embr-click-method 'atomic       ; 'atomic or 'immediate (see Configuration below)
-        embr-scroll-method 'default     ; 'default or 'smooth (see Configuration below)
-        embr-fullscreen-hack nil         ; t to fake fullscreen with CSS positioning
+        embr-scroll-method 'smooth      ; 'smooth or 'instant (see Configuration below)
         embr-external-command "yt-dlp -o - %s | mpv -")) ; Shell command for & key (%s = URL)
 ```
 
@@ -47,8 +46,7 @@ Emacs is the display server. Headless Firefox is the renderer.
         embr-screen-height 1080         ; Screen height reported to websites
         embr-search-engine 'brave       ; 'brave, 'google, 'duckduckgo, or custom URL with %s
         embr-click-method 'atomic       ; 'atomic or 'immediate (see Configuration below)
-        embr-scroll-method 'default     ; 'default or 'smooth (see Configuration below)
-        embr-fullscreen-hack nil         ; t to fake fullscreen with CSS positioning
+        embr-scroll-method 'smooth      ; 'smooth or 'instant (see Configuration below)
         embr-external-command "yt-dlp -o - %s | mpv -")) ; Shell command for & key (%s = URL)
 ```
 
@@ -98,8 +96,7 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 | `embr-screen-height` | `1080` | Screen height reported to websites (should be >= viewport) |
 | `embr-search-engine` | `'brave` | `'brave`, `'google`, `'duckduckgo`, or custom URL with `%s` |
 | `embr-click-method` | `'atomic` | Click dispatch method (see below) |
-| `embr-scroll-method` | `'default` | Scroll behavior (see below) |
-| `embr-fullscreen-hack` | `nil` | Fake Fullscreen API with fixed positioning (fixes video overflow) |
+| `embr-scroll-method` | `'smooth` | Scroll behavior (see below) |
 | `embr-external-command` | `"yt-dlp -o - %s \| mpv -"` | Shell command for `&` key (`%s` = URL). e.g. `"mpv %s"`, `"chromium %s"` |
 
 ### Click methods
@@ -113,8 +110,8 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 
 | Method | Behavior |
 |--------|----------|
-| `'default` | 100px instant scroll per wheel tick. Choppy, line-by-line feel. |
 | `'smooth` | 300px smooth-animated scroll per wheel tick. |
+| `'instant` | 100px instant scroll per wheel tick. Choppy, line-by-line feel. |
 
 ## Usage
 
@@ -148,7 +145,6 @@ The top-level keybindings below translate familiar Emacs motion keys into their 
 | `M-v` | Page up |
 | `&` | Run `embr-external-command` on current URL (default: yt-dlp + mpv) |
 | `F5` | Refresh page |
-| `F8` | Cycle viewport: iPhone → 720p → 1080p (Emacs handles up to 1080p well, higher loses perf) |
 | `C-x` | Emacs prefix (not forwarded) |
 | `M-x` | Emacs command (not forwarded) |
 | `C-c` | Browser command prefix (see below) |
@@ -169,7 +165,6 @@ Browser commands use the `C-c` prefix — eww-inspired commands, just behind a p
 | `C-c w` | Copy current URL to kill ring |
 | `C-c :` | Execute JavaScript |
 | `C-c q` | Quit (kills daemon and buffer) |
-| `C-c +` / `C-c -` | Zoom in / out |
 | `C-c n` | Open new tab |
 | `C-c d` | Close current tab |
 | `C-c ]` / `C-c [` | Next / previous tab |
@@ -222,18 +217,6 @@ That said, embr does take basic measures to reduce fingerprinting and look like 
 - Cookies and sessions persist across restarts (real browser profile)
 
 Ultimately, headless browsers are used by a lot of both good and bad bots, and a downside of this approach is that sometimes you'll get treated like one. In practice this mostly only affects large corporate sites (Google, Cloudflare-protected pages). Most of the web works fine — GitHub, Discord, and many others work without issues. We can't be playing cat and mouse trying to make this solution something that it's not.
-
-### Fullscreen video
-
-YouTube fullscreen works thanks to `embr-fullscreen-hack` (disabled by default — Camoufox may handle it natively), which intercepts the Fullscreen API and fakes it with CSS fixed positioning. Set to `t` if fullscreen breaks. YouTube without being logged in can still be uncooperative — throttling, interruptions, etc.
-
-**Odysee, Rumble, Bitchute** and similar sites use CSS-based "fullscreen" (Video.js fullwindow mode) instead of the real Fullscreen API, so the hack can't intercept it. Their fullscreen is currently broken — the video overflows the viewport. If you figure out a fix, PRs welcome.
-
-**Recommended workaround:** Press `&` to play any video through yt-dlp + mpv. This gives native fullscreen, better quality, and no headless browser detection. If the site requires login cookies, set your external command to:
-
-```elisp
-(setq embr-external-command "yt-dlp --cookies-from-browser firefox -o - %s | mpv -")
-```
 
 ### Does audio/video work?
 

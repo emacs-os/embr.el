@@ -88,18 +88,13 @@ Useful for sites that rely on press-and-hold interactions."
   :type '(choice (const :tag "Atomic (single click call)" atomic)
                  (const :tag "Immediate (mousedown/mouseup)" immediate)))
 
-(defcustom embr-scroll-method 'default
+(defcustom embr-scroll-method 'smooth
   "How scrolling behaves.
-`default' scrolls 100px instantly (choppy, line-by-line feel).
-`smooth' scrolls 300px with CSS smooth behavior."
-  :type '(choice (const :tag "Default (100px instant)" default)
-                 (const :tag "Smooth (300px smooth)" smooth)))
+`smooth' scrolls 300px with CSS smooth behavior.
+`instant' scrolls 100px instantly (choppy, line-by-line feel)."
+  :type '(choice (const :tag "Smooth (300px smooth)" smooth)
+                 (const :tag "Instant (100px instant)" instant)))
 
-(defcustom embr-fullscreen-hack nil
-  "When non-nil, fake the Fullscreen API with fixed positioning.
-Prevents HTML5 fullscreen video from overflowing the embr viewport in
-headless Firefox."
-  :type 'boolean)
 
 (defcustom embr-search-engine 'brave
   "Search engine for URL bar queries.
@@ -531,25 +526,6 @@ Better compatibility with iframe widgets like Cloudflare Turnstile."
           embr--hover-last-x nil
           embr--hover-last-y nil)))
 
-(defun embr-zoom-in ()
-  "Increase viewport size (zoom in — larger viewport = more content)."
-  (interactive)
-  (setq embr--viewport-width (+ embr--viewport-width 160)
-        embr--viewport-height (+ embr--viewport-height 90))
-  (embr--send `((cmd . "resize")
-                       (width . ,embr--viewport-width)
-                       (height . ,embr--viewport-height))
-                     #'embr--action-callback))
-
-(defun embr-zoom-out ()
-  "Decrease viewport size (zoom out — smaller viewport = larger content)."
-  (interactive)
-  (setq embr--viewport-width (max 320 (- embr--viewport-width 160))
-        embr--viewport-height (max 180 (- embr--viewport-height 90)))
-  (embr--send `((cmd . "resize")
-                       (width . ,embr--viewport-width)
-                       (height . ,embr--viewport-height))
-                     #'embr--action-callback))
 
 ;; ── Link hints ─────────────────────────────────────────────────────
 
@@ -617,24 +593,6 @@ Better compatibility with iframe widgets like Cloudflare Turnstile."
 
 ;; ── Resolution toggle ─────────────────────────────────────────────
 
-(defvar embr--resolutions
-  '((393 . 852) (1280 . 720) (1920 . 1080))
-  "List of (width . height) pairs to cycle through.")
-
-(defun embr-cycle-resolution ()
-  "Cycle viewport through 720p → 1080p → 1440p → 4K."
-  (interactive)
-  (let* ((current (cons embr--viewport-width embr--viewport-height))
-         (pos (cl-position current embr--resolutions :test #'equal))
-         (next (nth (mod (1+ (or pos -1)) (length embr--resolutions))
-                    embr--resolutions)))
-    (setq embr--viewport-width (car next)
-          embr--viewport-height (cdr next))
-    (embr--send `((cmd . "resize")
-                         (width . ,(car next))
-                         (height . ,(cdr next)))
-                       #'embr--action-callback)
-    (message "Viewport: %dx%d" (car next) (cdr next))))
 
 ;; ── External player ───────────────────────────────────────────────
 
@@ -869,7 +827,6 @@ Better compatibility with iframe widgets like Cloudflare Turnstile."
     ;; Override & for external player (like eww).
     (define-key map (kbd "&") #'embr-play-external)
     (define-key map (kbd "<f5>") #'embr-refresh)
-    (define-key map (kbd "<f8>") #'embr-cycle-resolution)
     ;; Special keys → forward to browser.
     (dolist (key '("<return>" "<backspace>" "<tab>" "<delete>"
                    "<home>" "<end>" "<up>" "<down>" "<left>" "<right>"
@@ -909,8 +866,6 @@ Better compatibility with iframe widgets like Cloudflare Turnstile."
     (define-key map (kbd "C-c C-k") #'embr-quit)
     (define-key map (kbd "C-c C-f") #'embr-forward)
     (define-key map (kbd "C-c C-b") #'embr-back)
-    (define-key map (kbd "C-c +") #'embr-zoom-in)
-    (define-key map (kbd "C-c -") #'embr-zoom-out)
     (define-key map (kbd "C-c h") #'embr-follow-hint)
     (define-key map (kbd "C-c t") #'embr-view-text)
     (define-key map (kbd "C-c w") #'embr-copy-url)
@@ -965,8 +920,7 @@ If the daemon is already running, just navigate to the new URL."
                    (height . ,embr--viewport-height)
                    (screen_width . ,embr-screen-width)
                    (screen_height . ,embr-screen-height)
-                   (fps . ,embr-fps)
-                   (fullscreen_hack . ,(if embr-fullscreen-hack t :json-false))))))
+                   (fps . ,embr-fps)))))
       (if (alist-get 'error resp)
           (error "embr: init failed: %s" (alist-get 'error resp))
         ;; Daemon tells us where it writes frames.
