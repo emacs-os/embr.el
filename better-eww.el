@@ -272,6 +272,7 @@ This does NOT remove the Emacs package itself — use your package manager for t
             ;; which steals keys like "i" (prefix for image commands in
             ;; Emacs 30+).  Remove it so our major-mode map handles all keys.
             (remove-text-properties (point-min) (point-max) '(keymap nil))
+            (put-text-property (point-min) (point-max) 'pointer 'arrow)
             (goto-char (point-min)))
           (rename-buffer (format "*better-eww: %s*"
                                  (if (string-empty-p title) url title))
@@ -803,6 +804,8 @@ This does NOT remove the Emacs package itself — use your package manager for t
   :group 'better-eww
   (setq-local buffer-read-only t)
   (setq-local cursor-type nil)
+  (setq-local void-text-area-pointer 'arrow)
+  (setq-local pointer-shape 'arrow)
   (setq-local bookmark-make-record-function #'better-eww--bookmark-make-record)
   (add-hook 'pre-command-hook #'better-eww--maybe-end-search nil t))
 
