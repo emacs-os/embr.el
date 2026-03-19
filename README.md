@@ -30,7 +30,8 @@ better-eww runs headless Firefox (~100MB, bundled by Playwright) as a backend. I
   :config
   (setq better-eww-fps 30
         better-eww-default-width 1280
-        better-eww-default-height 720))
+        better-eww-default-height 720
+        better-eww-search-engine 'brave))
 ```
 
 </td>
@@ -45,7 +46,8 @@ better-eww runs headless Firefox (~100MB, bundled by Playwright) as a backend. I
   :config
   (setq better-eww-fps 30
         better-eww-default-width 1280
-        better-eww-default-height 720))
+        better-eww-default-height 720
+        better-eww-search-engine 'brave))
 ```
 
 </td>
@@ -94,6 +96,15 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 
 `M-x better-eww-uninstall` cleans up all of the above.
 
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `better-eww-fps` | `30` | Target frames per second |
+| `better-eww-default-width` | `1280` | Viewport width in pixels |
+| `better-eww-default-height` | `720` | Viewport height in pixels |
+| `better-eww-search-engine` | `'brave` | `'brave`, `'google`, `'duckduckgo`, or a custom URL string with `%s` |
+
 ## Usage
 
 ```
@@ -106,7 +117,7 @@ All keys are forwarded directly to the browser. Typing, arrows, backspace, tab, 
 
 | Key | Action |
 |-----|--------|
-| `C-l` | Go to URL (with history completion) |
+| `C-l` | Go to URL or search (with history completion) |
 | `C-b` | Left arrow |
 | `C-f` | Right arrow |
 | `C-n` | Down arrow |
@@ -130,7 +141,7 @@ Browser commands use the `C-c` prefix.
 
 | Key | Action |
 |-----|--------|
-| `C-c l` | Go to URL (with history completion) |
+| `C-c l` | Go to URL or search (same as `C-l`) |
 | `C-c h` | Follow link (Vimium-style hint labels) |
 | `C-c r` | Refresh |
 | `C-c b` | Back |

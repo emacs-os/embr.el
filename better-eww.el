@@ -53,6 +53,24 @@ alongside the .el in the builds dir, so this just works.")
   "Target frames per second for the screenshot stream."
   :type 'integer)
 
+(defcustom better-eww-search-engine 'brave
+  "Search engine for URL bar queries.
+Can be a symbol (`brave', `google', `duckduckgo') or a custom URL
+string with %s for the query."
+  :type '(choice (const :tag "Brave" brave)
+                 (const :tag "Google" google)
+                 (const :tag "DuckDuckGo" duckduckgo)
+                 (string :tag "Custom URL (use %s for query)")))
+
+(defun better-eww--search-url (query)
+  "Build a search URL for QUERY using `better-eww-search-engine'."
+  (let ((template (pcase better-eww-search-engine
+                    ('brave "https://search.brave.com/search?q=%s")
+                    ('google "https://www.google.com/search?q=%s")
+                    ('duckduckgo "https://duckduckgo.com/?q=%s")
+                    ((pred stringp) better-eww-search-engine))))
+    (format template (url-hexify-string query))))
+
 ;; ── Setup & management ─────────────────────────────────────────────
 
 (defun better-eww--setup-needed-p ()
@@ -265,14 +283,24 @@ This does NOT remove the Emacs package itself — use your package manager for t
                            (message "better-eww JS error: %s" err)
                          (message "=> %s" (alist-get 'result resp))))))
 
+(defun better-eww--maybe-search-url (input)
+  "If INPUT looks like a URL, return it as-is; otherwise build a search URL."
+  (if (or (string-match-p "\\`https?://" input)
+          (string-match-p "\\`file://" input)
+          (and (string-match-p "\\." input)
+               (not (string-match-p " " input))))
+      input
+    (better-eww--search-url input)))
+
 (defun better-eww-navigate (url)
-  "Navigate to URL."
-  (interactive (list (completing-read "URL: " better-eww--url-history nil nil nil
+  "Navigate to URL, or search if input doesn't look like a URL."
+  (interactive (list (completing-read "URL/Search: " better-eww--url-history nil nil nil
                                       'better-eww--url-history)))
-  (push url better-eww--url-history)
-  (delete-dups better-eww--url-history)
-  (better-eww--send `((cmd . "navigate") (url . ,url))
-                     #'better-eww--action-callback))
+  (let ((target (better-eww--maybe-search-url url)))
+    (push url better-eww--url-history)
+    (delete-dups better-eww--url-history)
+    (better-eww--send `((cmd . "navigate") (url . ,target))
+                       #'better-eww--action-callback)))
 
 (defun better-eww-refresh ()
   "Refresh the current page."
@@ -425,9 +453,16 @@ This does NOT remove the Emacs package itself — use your package manager for t
 ;; ── Find in page ───────────────────────────────────────────────────
 
 (defvar better-eww--search-query "" "Current find-in-page query.")
+(defvar better-eww--searching nil "Non-nil when in a search sequence.")
+
+(defun better-eww--maybe-end-search ()
+  "Clear search state if the next command is not a search command."
+  (unless (memq this-command '(better-eww-isearch-forward better-eww-isearch-backward))
+    (setq better-eww--searching nil)))
 
 (defun better-eww--find-on-page (backwards)
   "Run window.find() with the current search query.  Search BACKWARDS if non-nil."
+  (setq better-eww--searching t)
   (let ((escaped (replace-regexp-in-string "'" "\\\\'" better-eww--search-query)))
     (better-eww--send
      `((cmd . "js")
@@ -436,15 +471,17 @@ This does NOT remove the Emacs package itself — use your package manager for t
      (lambda (resp)
        (if-let* ((err (alist-get 'error resp)))
            (message "better-eww find error: %s" err)
-         (when (eq (alist-get 'result resp) :json-false)
-           (message "better-eww: no more matches")))))))
+         (if (eq (alist-get 'result resp) :json-false)
+             (message "better-eww: no more matches")
+           (message "Search: %s" better-eww--search-query)))))))
 
 (defun better-eww-isearch-forward ()
   "Search forward.  First call prompts for query; repeating finds next match."
   (interactive)
-  (if (and (memq last-command '(better-eww-isearch-forward better-eww-isearch-backward))
+  (if (and better-eww--searching
            (not (string-empty-p better-eww--search-query)))
       (better-eww--find-on-page nil)
+    (setq better-eww--searching nil)
     (let ((query (read-string "Search: " better-eww--search-query)))
       (unless (string-empty-p query)
         (setq better-eww--search-query query)
@@ -453,9 +490,10 @@ This does NOT remove the Emacs package itself — use your package manager for t
 (defun better-eww-isearch-backward ()
   "Search backward.  First call prompts for query; repeating finds previous match."
   (interactive)
-  (if (and (memq last-command '(better-eww-isearch-forward better-eww-isearch-backward))
+  (if (and better-eww--searching
            (not (string-empty-p better-eww--search-query)))
       (better-eww--find-on-page t)
+    (setq better-eww--searching nil)
     (let ((query (read-string "Search backward: " better-eww--search-query)))
       (unless (string-empty-p query)
         (setq better-eww--search-query query)
@@ -577,6 +615,7 @@ This does NOT remove the Emacs package itself — use your package manager for t
     ("<right>" "ArrowRight")
     ("<prior>" "PageUp")
     ("<next>" "PageDown")
+    ("<escape>" "Escape")
     (_ key)))
 
 (defun better-eww-self-insert ()
@@ -654,7 +693,8 @@ This does NOT remove the Emacs package itself — use your package manager for t
   :group 'better-eww
   (setq-local buffer-read-only t)
   (setq-local cursor-type nil)
-  (setq-local bookmark-make-record-function #'better-eww--bookmark-make-record))
+  (setq-local bookmark-make-record-function #'better-eww--bookmark-make-record)
+  (add-hook 'pre-command-hook #'better-eww--maybe-end-search nil t))
 
 ;; ── Entry point ────────────────────────────────────────────────────
 

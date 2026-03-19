@@ -133,12 +133,11 @@ async def main():
             return {"ok": True}
 
         if cmd == "scroll":
-            x = params.get("x", 0)
-            y = params.get("y", 0)
             delta_x = params.get("delta_x", 0)
             delta_y = params.get("delta_y", 0)
-            await page.mouse.move(x, y)
-            await page.mouse.wheel(delta_x, delta_y)
+            await page.evaluate(
+                f"window.scrollBy({{left: {delta_x}, top: {delta_y}, behavior: 'smooth'}})"
+            )
             return {"ok": True}
 
         if cmd == "back":
