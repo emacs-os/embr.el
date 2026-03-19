@@ -2,45 +2,51 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## What This Is
+## Project Overview
 
-embr is a real web browser inside Emacs. It runs headless Firefox via Playwright, renders pages as PNG screenshots displayed in an Emacs image buffer, and forwards mouse/keyboard/scroll events back to Firefox. Two files do all the work: a Python daemon and an Emacs package.
+**embr.el** is an Emacs browser that uses headless Firefox (via Camoufox) as its rendering engine. Emacs acts as the display server showing JPEG screenshots, while a Python daemon handles browser automation.
 
 ## Architecture
 
-Emacs (`embr.el`) spawns a Python subprocess (`embr.py`). They communicate via JSON lines over stdin/stdout — one JSON object per line, no sockets or HTTP. Every command (click, type, scroll, navigate) returns a base64-encoded PNG screenshot plus page title and URL.
+Client-server over JSON lines on stdin/stdout:
 
-The daemon holds a single Playwright persistent browser context with one page. Persistent context means cookies/sessions survive across restarts (stored in `~/.local/share/embr/firefox-profile/`). Playwright uses its own bundled Firefox (not the system one) — this is required because Playwright patches Firefox for its automation protocol.
-
-The Emacs side has two input modes: **navigation mode** (vim-like keys: `g` navigate, `B` back, `F` forward, `r` refresh, `q` quit) and **insert mode** (`i` to enter, `C-g` to exit) where all keystrokes are forwarded to the browser.
-
-## Setup
-
-```bash
-bash setup.sh   # creates .venv, installs playwright, downloads bundled firefox
+```
+Emacs (embr.el) ←→ JSON over stdin/stdout ←→ Python daemon (embr.py)
+  UI / keybindings                            Playwright/Camoufox browser control
+  Image display                               JPEG screenshot loop → /tmp/embr-frame.jpg
 ```
 
-## Testing the Daemon Standalone
+**embr.el** (~930 lines): Emacs Lisp major mode with process management, async JSON protocol, frame display, keybinding translation, link hints, tab management, bookmarks integration.
 
-```bash
-printf '{"cmd":"init","width":1280,"height":720}\n{"cmd":"navigate","url":"https://example.com"}\n{"cmd":"quit"}\n' | .venv/bin/python embr.py
-```
+**embr.py** (~330 lines): asyncio-based daemon using Camoufox (Playwright API). Handles browser commands, screenshot capture loop, domain-level ad blocking (blocklist.txt), and form interaction.
 
-First line of output is `{"ok": true}`, second is a JSON object with `screenshot` (base64 PNG), `title`, and `url`.
+**setup.sh**: Creates Python venv at `~/.local/share/embr/.venv/`, installs `camoufox[geoip]`, downloads browser, fetches StevenBlack/hosts blocklist. Builds in temp venv and swaps atomically.
 
-## Testing in Emacs
+## Key Design Patterns
 
-```elisp
-(load-file "/path/to/embr/embr.el")
-M-x embr-browse RET https://example.com RET
-```
+- **JSON line protocol**: Each message is a single JSON line. Commands from Emacs have an `action` field; responses include `url`, `title`, and optionally `error`.
+- **Frame streaming**: Python writes JPEG to temp file then renames atomically. Emacs reads the file on each frame notification. Frame batching skips intermediate frames if the UI can't keep up.
+- **Async with callbacks**: `embr--send` dispatches commands with optional callback. `embr--send-sync` blocks via `accept-process-output` for synchronous results.
+- **Dual click modes**: `atomic` defers mousedown until drag is detected (better iframe compat); `immediate` sends mousedown instantly.
+- **Ad blocking**: Two layers — uBlock Origin (built into Camoufox) + domain-level route interception from blocklist.txt (~82K domains).
 
-## README Convention
+## Development Notes
 
-The use-package blocks in the README (Elpaca and straight.el) must always list every `defcustom` configuration option with its default value. This gives users copy-paste-ready config with all knobs visible. When adding a new `defcustom`, always add it to both use-package blocks and the Configuration table in the README.
+- No formal test suite exists. Testing is manual via interactive Emacs commands.
+- No linter/formatter configuration. Emacs Lisp follows GNU conventions; Python is PEP-ish.
+- `blocklist.txt` is in `.gitignore` — it's downloaded by `setup.sh`, not checked in.
+- Emacs 29.1+ required (image support). Python 3.10+ required.
+- Browser profile persists at `~/.local/share/embr/firefox-profile/`.
 
-## Key Conventions
+## Working with the Code
 
-- Python daemon: async (`asyncio`), single-file, no classes — just `async def handle()` with a flat if/elif command dispatch. Stdout is exclusively for JSON responses; all logging/errors from Playwright go to stderr.
-- Elisp package: single-file, `embr-` public prefix, `embr--` private prefix. Communication is async via process filters and callbacks; `embr--send-sync` is only used during init.
-- Playwright key names (e.g. `"Enter"`, `"ArrowDown"`, `"Backspace"`) are used in the JSON protocol. The elisp side translates Emacs key descriptions to Playwright names in `embr--translate-key`.
+When modifying the JSON protocol (adding commands), both files must be updated:
+1. Add the command handler in `embr.py`'s `handle_command` function
+2. Add the Emacs-side command and keybinding in `embr.el`
+
+Keybindings are defined near the bottom of `embr.el` in `embr-mode-map`. Printable chars (32-126) are forwarded to the browser. Emacs-style motion keys (C-n/p/b/f) are translated to arrow key equivalents. Browser commands use the `C-c` prefix.
+
+## Keeping Docs in Sync
+
+- **README.md `use-package` blocks**: The Elpaca and straight.el example configs in README.md must list all `defcustom` variables with their default values. When adding, removing, or renaming a config variable, update both `use-package` blocks to match.
+- **README.md tables and keybindings**: After any change to configuration variables (add/remove/rename/default change) or keybindings (add/remove/rebind), update the corresponding Configuration table and Keybindings tables in README.md.
