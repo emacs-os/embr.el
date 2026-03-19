@@ -8,7 +8,7 @@
 
 ;;; Commentary:
 
-;; embr runs a headless Firefox (via Playwright) and displays
+;; embr runs a headless Firefox (via Camoufox/Playwright) and displays
 ;; screenshots in an Emacs buffer.  Clicks, keystrokes, and scroll
 ;; events are forwarded to the browser.  The daemon streams frames
 ;; at ~30 FPS via JPEG files on disk.
@@ -95,7 +95,7 @@ Useful for sites that rely on press-and-hold interactions."
   :type '(choice (const :tag "Default (100px instant)" default)
                  (const :tag "Smooth (300px smooth)" smooth)))
 
-(defcustom embr-fullscreen-hack t
+(defcustom embr-fullscreen-hack nil
   "When non-nil, fake the Fullscreen API with fixed positioning.
 Prevents HTML5 fullscreen video from overflowing the embr viewport in
 headless Firefox."
@@ -162,7 +162,7 @@ This does NOT remove the Emacs package itself — use your package manager for t
       (insert (format "Running uninstall.sh in %s ...\n\n" embr--directory))
       ;; Run with yes piped to stdin to auto-confirm (user already confirmed via M-x).
       (when (y-or-n-p "Remove Python venv and browser profile? ")
-        (let* ((also-browsers (y-or-n-p "Also delete Playwright's shared browser cache (~/.cache/ms-playwright)? "))
+        (let* ((also-browsers (y-or-n-p "Also delete Camoufox's browser cache (~/.cache/camoufox)? "))
                (input (concat "y\n" (if also-browsers "y\n" "n\n")))
                (proc (start-process "embr-uninstall" buf "bash" "-c"
                                      (format "echo %s | bash %s"
@@ -181,8 +181,8 @@ This does NOT remove the Emacs package itself — use your package manager for t
   "Show diagnostic info about the embr installation."
   (interactive)
   (let ((venv-dir (expand-file-name ".venv" embr--data-dir))
-        (browsers-dir (expand-file-name "ms-playwright" (or (getenv "XDG_CACHE_HOME")
-                                                            (expand-file-name ".cache" "~"))))
+        (browsers-dir (expand-file-name "camoufox" (or (getenv "XDG_CACHE_HOME")
+                                                        (expand-file-name ".cache" "~"))))
         (profile-dir (expand-file-name "embr" (or (getenv "XDG_DATA_HOME")
                                                          (expand-file-name ".local/share" "~")))))
     (message "embr installation:

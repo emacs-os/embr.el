@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/embr"
-BROWSERS_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/ms-playwright"
+BROWSERS_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/camoufox"
 BLOCKLIST="$SCRIPT_DIR/blocklist.txt"
 
 echo "This will delete:"
@@ -27,7 +27,7 @@ fi
 rm -f "$BLOCKLIST"
 
 echo ""
-read -rp "Also delete Playwright's shared browser cache ($BROWSERS_DIR)? [y/N] " confirm2
+read -rp "Also delete Camoufox's browser cache ($BROWSERS_DIR)? [y/N] " confirm2
 if [[ "$confirm2" == [yY] ]] && [ -d "$BROWSERS_DIR" ]; then
     rm -rf "$BROWSERS_DIR"
     echo "Deleted $BROWSERS_DIR"

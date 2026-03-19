@@ -24,8 +24,10 @@ trap cleanup EXIT
 # Build everything in a temp venv.
 rm -rf "$TMP_VENV"
 python3 -m venv "$TMP_VENV"
-"$TMP_VENV/bin/pip" install playwright
-"$TMP_VENV/bin/python" -m playwright install firefox
+# "$TMP_VENV/bin/pip" install playwright
+# "$TMP_VENV/bin/python" -m playwright install firefox
+"$TMP_VENV/bin/pip" install "camoufox[geoip]"
+"$TMP_VENV/bin/python" -m camoufox fetch
 
 # Swap atomically.
 if [ -d "$VENV_DIR" ]; then
@@ -44,4 +46,4 @@ curl -sL "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts" \
 mv "$BLOCKLIST.tmp" "$BLOCKLIST"
 echo "Blocklist: $(wc -l < "$BLOCKLIST") domains"
 
-echo "Setup complete. Firefox and Playwright are ready."
+echo "Setup complete. Camoufox is ready."

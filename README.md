@@ -27,7 +27,7 @@ Emacs is the display server. Headless Firefox is the renderer.
         embr-search-engine 'brave       ; 'brave, 'google, 'duckduckgo, or custom URL with %s
         embr-click-method 'atomic       ; 'atomic or 'immediate (see Configuration below)
         embr-scroll-method 'default     ; 'default or 'smooth (see Configuration below)
-        embr-fullscreen-hack t          ; nil to use native (broken) fullscreen
+        embr-fullscreen-hack nil         ; t to fake fullscreen with CSS positioning
         embr-external-command "yt-dlp -o - %s | mpv -")) ; Shell command for & key (%s = URL)
 ```
 
@@ -48,7 +48,7 @@ Emacs is the display server. Headless Firefox is the renderer.
         embr-search-engine 'brave       ; 'brave, 'google, 'duckduckgo, or custom URL with %s
         embr-click-method 'atomic       ; 'atomic or 'immediate (see Configuration below)
         embr-scroll-method 'default     ; 'default or 'smooth (see Configuration below)
-        embr-fullscreen-hack t          ; nil to use native (broken) fullscreen
+        embr-fullscreen-hack nil         ; t to fake fullscreen with CSS positioning
         embr-external-command "yt-dlp -o - %s | mpv -")) ; Shell command for & key (%s = URL)
 ```
 
@@ -61,7 +61,7 @@ Emacs is the display server. Headless Firefox is the renderer.
 
 ## Setup
 
-After installing, run `M-x embr-setup-or-update` to create the Python venv and download Playwright's bundled Firefox (~100MB).
+After installing, run `M-x embr-setup-or-update` to create the Python venv and download Camoufox (a Playwright-compatible anti-detect Firefox fork with uBlock Origin built in).
 
 If you skip this step, `M-x embr-browse` will detect the missing venv and offer to run setup for you automatically.
 
@@ -71,7 +71,7 @@ All management is done from Emacs, no terminal needed.
 
 | Command | Description |
 |---------|-------------|
-| `M-x embr-setup-or-update` | Install or update venv + Playwright + Firefox + ad blocklist (runs `setup.sh`) |
+| `M-x embr-setup-or-update` | Install or update venv + Camoufox + ad blocklist (runs `setup.sh`) |
 | `M-x embr-uninstall` | Remove venv, browsers, and browser profile (runs `uninstall.sh`) |
 | `M-x embr-info` | Show diagnostic info about the installation |
 
@@ -82,7 +82,7 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 | What | Path |
 |------|------|
 | Python venv | `~/.local/share/embr/.venv/` |
-| Playwright browsers | `~/.cache/ms-playwright/` |
+| Camoufox browser | `~/.cache/camoufox/` |
 | Cookies & sessions | `~/.local/share/embr/firefox-profile/` |
 
 `M-x embr-uninstall` cleans up all of the above.
@@ -99,7 +99,7 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 | `embr-search-engine` | `'brave` | `'brave`, `'google`, `'duckduckgo`, or custom URL with `%s` |
 | `embr-click-method` | `'atomic` | Click dispatch method (see below) |
 | `embr-scroll-method` | `'default` | Scroll behavior (see below) |
-| `embr-fullscreen-hack` | `t` | Fake Fullscreen API with fixed positioning (fixes video overflow) |
+| `embr-fullscreen-hack` | `nil` | Fake Fullscreen API with fixed positioning (fixes video overflow) |
 | `embr-external-command` | `"yt-dlp -o - %s \| mpv -"` | Shell command for `&` key (`%s` = URL). e.g. `"mpv %s"`, `"chromium %s"` |
 
 ### Click methods
@@ -184,13 +184,16 @@ Standard Emacs bookmarks work: `C-x r m` to save, `C-x r b` to jump.
 
 ## Ad Blocking
 
-Built-in domain-level ad blocking using the [StevenBlack/hosts](https://github.com/StevenBlack/hosts) blocklist (~82K ad and tracker domains). Requests to blocked domains are intercepted and killed before they hit the network.
+Two layers of ad blocking:
 
-The blocklist is downloaded automatically by `setup.sh` and refreshed every time you run `M-x embr-setup-or-update`. No extensions or extra configuration needed.
+1. **uBlock Origin** — bundled via [Camoufox](https://camoufox.com/), providing full cosmetic filtering, element hiding, and script blocking out of the box.
+2. **Domain-level blocklist** — using the [StevenBlack/hosts](https://github.com/StevenBlack/hosts) list (~82K ad and tracker domains), requests to blocked domains are intercepted and killed before they hit the network.
+
+The blocklist is downloaded automatically by `setup.sh` and refreshed every time you run `M-x embr-setup-or-update`. uBlock Origin requires no configuration.
 
 ## How It Works
 
-Emacs spawns a Python subprocess (`embr.py`) that controls headless Firefox through Playwright. They communicate via JSON lines over stdin/stdout. The daemon streams JPEG screenshots at ~30 FPS via a temp file on disk, giving live visual feedback.
+Emacs spawns a Python subprocess (`embr.py`) that controls headless Firefox through [Camoufox](https://camoufox.com/) (a Playwright-compatible anti-detect Firefox fork). They communicate via JSON lines over stdin/stdout. The daemon streams JPEG screenshots at ~30 FPS via a temp file on disk, giving live visual feedback.
 
 Browser sessions persist across restarts. Cookies and login state are stored in `~/.local/share/embr/firefox-profile/`.
 
@@ -215,14 +218,14 @@ That said, embr does take basic measures to reduce fingerprinting and look like 
 - `navigator.webdriver` is removed (the main headless browser tell)
 - `navigator.plugins` and `navigator.mimeTypes` report a PDF Viewer (empty arrays are a common detection signal)
 - Screen size defaults to 1920x1080 independent of viewport (real browsers always have screen > viewport)
-- User-Agent is real Firefox (comes from Playwright's bundled Firefox)
+- User-Agent is real Firefox (comes from Camoufox's bundled Firefox)
 - Cookies and sessions persist across restarts (real browser profile)
 
 Ultimately, headless browsers are used by a lot of both good and bad bots, and a downside of this approach is that sometimes you'll get treated like one. In practice this mostly only affects large corporate sites (Google, Cloudflare-protected pages). Most of the web works fine — GitHub, Discord, and many others work without issues. We can't be playing cat and mouse trying to make this solution something that it's not.
 
 ### Fullscreen video
 
-YouTube fullscreen works thanks to `embr-fullscreen-hack` (enabled by default), which intercepts the Fullscreen API and fakes it with CSS fixed positioning. YouTube without being logged in can still be uncooperative — throttling, interruptions, etc.
+YouTube fullscreen works thanks to `embr-fullscreen-hack` (disabled by default — Camoufox may handle it natively), which intercepts the Fullscreen API and fakes it with CSS fixed positioning. Set to `t` if fullscreen breaks. YouTube without being logged in can still be uncooperative — throttling, interruptions, etc.
 
 **Odysee, Rumble, Bitchute** and similar sites use CSS-based "fullscreen" (Video.js fullwindow mode) instead of the real Fullscreen API, so the hack can't intercept it. Their fullscreen is currently broken — the video overflows the viewport. If you figure out a fix, PRs welcome.
 
@@ -246,7 +249,7 @@ No plans to add this upstream, but PRs are welcome. If you implement it, gate it
 
 ### Does this work on macOS?
 
-Unknown — embr is developed and tested on Linux. Playwright and headless Firefox should work on macOS, but no one has tried it yet. If you get it working (or not), please open an issue or PR.
+Unknown — embr is developed and tested on Linux. Camoufox and headless Firefox should work on macOS, but no one has tried it yet. If you get it working (or not), please open an issue or PR.
 
 ### YouTube videos error after a few minutes
 

@@ -29,6 +29,7 @@ def load_blocklist():
 
 async def main():
     from playwright.async_api import async_playwright
+    from camoufox.async_api import AsyncNewBrowser
     pw = await async_playwright().start()
     context = None
     page = None
@@ -72,12 +73,13 @@ async def main():
         if cmd == "init":
             width = params.get("width", 1280)
             height = params.get("height", 720)
-            context = await pw.firefox.launch_persistent_context(
-                str(user_data_dir),
+            context = await AsyncNewBrowser(
+                pw,
+                persistent_context=True,
+                user_data_dir=str(user_data_dir),
                 headless=True,
+                enable_cache=True,
                 viewport={"width": width, "height": height},
-                screen={"width": params.get("screen_width", 1920),
-                        "height": params.get("screen_height", 1080)},
                 accept_downloads=False,
             )
             # Ad blocking via request interception.
