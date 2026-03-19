@@ -19,8 +19,7 @@ Emacs is the display server. Headless Firefox is the renderer.
            :repo "emacs-os/embr.el"
            :files ("*.el" "*.py" "*.sh"))
   :config
-  (setq browse-url-browser-function 'embr-browse ; Make embr the default Emacs browser
-        embr-fps 30                    ; Target frames per second
+  (setq embr-fps 30                    ; Target frames per second
         embr-default-width 1280         ; Viewport width in pixels
         embr-default-height 720         ; Viewport height in pixels
         embr-screen-width 1920          ; Screen width reported to websites
@@ -41,8 +40,7 @@ Emacs is the display server. Headless Firefox is the renderer.
              :repo "emacs-os/embr.el"
              :files ("*.el" "*.py" "*.sh"))
   :config
-  (setq browse-url-browser-function 'embr-browse ; Make embr the default Emacs browser
-        embr-fps 30                    ; Target frames per second
+  (setq embr-fps 30                    ; Target frames per second
         embr-default-width 1280         ; Viewport width in pixels
         embr-default-height 720         ; Viewport height in pixels
         embr-screen-width 1920          ; Screen width reported to websites
@@ -54,9 +52,10 @@ Emacs is the display server. Headless Firefox is the renderer.
         embr-external-command "yt-dlp -o - %s | mpv -")) ; Shell command for & key (%s = URL)
 ```
 
-**Tip:** Enable `global-goto-address-mode` to make URLs clickable everywhere in Emacs — they'll open in embr automatically:
+**Tip:** Make embr your default Emacs browser and enable clickable URLs everywhere:
 
 ```elisp
+(setq browse-url-browser-function 'embr-browse)
 (global-goto-address-mode 1)
 ```
 

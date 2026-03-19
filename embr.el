@@ -938,7 +938,7 @@ Better compatibility with iframe widgets like Cloudflare Turnstile."
 ;; ── Entry point ────────────────────────────────────────────────────
 
 ;;;###autoload
-(defun embr-browse (url)
+(defun embr-browse (url &optional _new-window)
   "Launch embr and navigate to URL.
 If the daemon is already running, just navigate to the new URL."
   (interactive "sURL: ")
