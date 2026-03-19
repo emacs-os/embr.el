@@ -61,8 +61,8 @@ async def main():
                 start = asyncio.get_event_loop().time()
                 try:
                     await write_frame()
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"embr: screenshot error: {e}", file=sys.stderr)
                 elapsed = asyncio.get_event_loop().time() - start
                 await asyncio.sleep(max(0, (1 / target_fps) - elapsed))
             else:
@@ -120,15 +120,14 @@ async def main():
             url = params["url"]
             if not url.startswith(("http://", "https://", "file://")):
                 url = "https://" + url
-            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            try:
+                await page.goto(url, wait_until="domcontentloaded", timeout=10000)
+            except Exception:
+                pass  # Timeout or nav error — page state visible via screenshots.
             return {"ok": True}
 
         if cmd == "click":
             await page.mouse.click(params["x"], params["y"])
-            try:
-                await page.wait_for_load_state("domcontentloaded", timeout=5000)
-            except Exception:
-                pass
             return {"ok": True}
 
         if cmd == "mousedown":
@@ -139,10 +138,6 @@ async def main():
         if cmd == "mouseup":
             await page.mouse.move(params["x"], params["y"])
             await page.mouse.up()
-            try:
-                await page.wait_for_load_state("domcontentloaded", timeout=5000)
-            except Exception:
-                pass
             return {"ok": True}
 
 
@@ -156,10 +151,6 @@ async def main():
 
         if cmd == "key":
             await page.keyboard.press(params["key"])
-            try:
-                await page.wait_for_load_state("domcontentloaded", timeout=2000)
-            except Exception:
-                pass
             return {"ok": True}
 
         if cmd == "scroll":
@@ -172,15 +163,24 @@ async def main():
             return {"ok": True}
 
         if cmd == "back":
-            await page.go_back(wait_until="domcontentloaded", timeout=5000)
+            try:
+                await page.go_back(wait_until="domcontentloaded", timeout=5000)
+            except Exception:
+                pass
             return {"ok": True}
 
         if cmd == "forward":
-            await page.go_forward(wait_until="domcontentloaded", timeout=5000)
+            try:
+                await page.go_forward(wait_until="domcontentloaded", timeout=5000)
+            except Exception:
+                pass
             return {"ok": True}
 
         if cmd == "refresh":
-            await page.reload(wait_until="domcontentloaded", timeout=10000)
+            try:
+                await page.reload(wait_until="domcontentloaded", timeout=10000)
+            except Exception:
+                pass
             return {"ok": True}
 
         if cmd == "js":
@@ -300,28 +300,57 @@ async def main():
         line = await reader.readline()
         if not line:
             break
-        line = line.decode("utf-8").strip()
-        if not line:
-            continue
 
-        try:
-            msg = json.loads(line)
-        except json.JSONDecodeError as e:
-            emit({"error": f"invalid JSON: {e}"})
-            continue
+        # Batch-read: collect this line plus any already buffered.
+        pending = [line]
+        while b'\n' in reader._buffer:
+            pending.append(await reader.readline())
 
-        cmd = msg.get("cmd", "")
-        params = {k: v for k, v in msg.items() if k != "cmd"}
+        # Parse all pending lines; coalesce consecutive mousemoves so they
+        # don't starve real commands after a slow handler (click/navigate).
+        commands = []
+        last_mousemove = None
+        for raw in pending:
+            text = raw.decode("utf-8").strip()
+            if not text:
+                continue
+            try:
+                msg = json.loads(text)
+            except json.JSONDecodeError as e:
+                emit({"error": f"invalid JSON: {e}"})
+                continue
+            if msg.get("cmd") == "mousemove":
+                last_mousemove = msg
+            else:
+                # Flush any accumulated mousemove before a real command
+                # so the cursor position is up-to-date.
+                if last_mousemove is not None:
+                    commands.append(last_mousemove)
+                    last_mousemove = None
+                commands.append(msg)
+        if last_mousemove is not None:
+            commands.append(last_mousemove)
 
-        try:
-            resp = await handle(cmd, params)
-        except Exception as e:
-            resp = {"error": str(e)}
-
-        if resp is None:
+        # Process the coalesced batch.  Wrap each handler call in a
+        # timeout so a single hung Playwright command can't permanently
+        # block the command loop (the live-debug showed page.goto/go_back
+        # can hang past their own timeouts, freezing all future commands).
+        should_exit = False
+        for msg in commands:
+            cmd = msg.get("cmd", "")
+            params = {k: v for k, v in msg.items() if k != "cmd"}
+            try:
+                resp = await asyncio.wait_for(handle(cmd, params), timeout=35)
+            except asyncio.TimeoutError:
+                resp = {"error": f"command timed out: {cmd}"}
+            except Exception as e:
+                resp = {"error": str(e)}
+            if resp is None:
+                should_exit = True
+                break
+            emit(resp)
+        if should_exit:
             break
-
-        emit(resp)
 
 
 if __name__ == "__main__":

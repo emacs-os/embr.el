@@ -212,6 +212,8 @@ This does NOT remove the Emacs package itself — use your package manager for t
 (defvar embr--hover-timer nil "Timer for mouse hover tracking.")
 (defvar embr--hover-last-x nil "Last hover X coordinate sent.")
 (defvar embr--hover-last-y nil "Last hover Y coordinate sent.")
+(defvar embr--pending-frame nil "Latest frame response waiting to be rendered.")
+(defvar embr--render-timer nil "Timer that renders pending frames at a capped rate.")
 
 ;; ── Process management ─────────────────────────────────────────────
 
@@ -226,6 +228,7 @@ This does NOT remove the Emacs package itself — use your package manager for t
          :command (list embr-python embr-script)
          :connection-type 'pipe
          :noquery t
+         :stderr (get-buffer-create "*embr-stderr*")
          :filter #'embr--process-filter
          :sentinel #'embr--process-sentinel)))
 
@@ -256,14 +259,18 @@ This does NOT remove the Emacs package itself — use your package manager for t
                         (funcall cb resp))))))
             (error (message "embr: JSON parse error: %s"
                             (error-message-string err)))))))
-    ;; Render only the most recent frame.
+    ;; Stash the latest frame for the render timer instead of
+    ;; rendering synchronously — keeps Emacs responsive during
+    ;; high-FPS streams (e.g. video playback).
     (when last-frame
-      (embr--handle-frame last-frame))))
+      (setq embr--pending-frame last-frame))))
 
 (defun embr--process-sentinel (_proc event)
   "Handle process EVENT (e.g. exit)."
   (when (string-match-p "\\(finished\\|exited\\|killed\\)" event)
     (message "embr: daemon exited: %s" (string-trim event))
+    (embr--hover-stop)
+    (embr--render-stop)
     (setq embr--process nil)))
 
 (defun embr--send (msg &optional callback)
@@ -375,6 +382,7 @@ This does NOT remove the Emacs package itself — use your package manager for t
     (when (process-live-p embr--process)
       (delete-process embr--process)))
   (embr--hover-stop)
+  (embr--render-stop)
   (setq embr--process nil
         embr--frame-path nil)
   (when (buffer-live-p embr--buffer)
@@ -510,7 +518,12 @@ Better compatibility with iframe widgets like Cloudflare Turnstile."
                                (eql img-y embr--hover-last-y))))
             (setq embr--hover-last-x img-x
                   embr--hover-last-y img-y)
-            (embr--send `((cmd . "mousemove") (x . ,img-x) (y . ,img-y)) nil)))))))
+            ;; Write directly to process — don't touch embr--callback.
+            ;; Using embr--send here would clobber any pending command callback.
+            (process-send-string
+             embr--process
+             (concat (json-encode `((cmd . "mousemove") (x . ,img-x) (y . ,img-y))) "\n"))))))))
+
 
 (defun embr--hover-start ()
   "Start the hover tracking timer."
@@ -525,6 +538,28 @@ Better compatibility with iframe widgets like Cloudflare Turnstile."
           embr--hover-last-x nil
           embr--hover-last-y nil)))
 
+
+;; ── Render timer ──────────────────────────────────────────────────
+
+(defun embr--render-tick ()
+  "Render the latest pending frame, if any.  Runs on a timer."
+  (when embr--pending-frame
+    (let ((frame embr--pending-frame))
+      (setq embr--pending-frame nil)
+      (embr--handle-frame frame))))
+
+(defun embr--render-start ()
+  "Start the frame render timer at `embr-fps' Hz."
+  (embr--render-stop)
+  (setq embr--render-timer
+        (run-at-time 0 (/ 1.0 embr-fps) #'embr--render-tick)))
+
+(defun embr--render-stop ()
+  "Stop the frame render timer."
+  (when embr--render-timer
+    (cancel-timer embr--render-timer)
+    (setq embr--render-timer nil
+          embr--pending-frame nil)))
 
 ;; ── Link hints ─────────────────────────────────────────────────────
 
@@ -926,7 +961,8 @@ If the daemon is already running, just navigate to the new URL."
           (error "embr: init failed: %s" (alist-get 'error resp))
         ;; Daemon tells us where it writes frames.
         (setq embr--frame-path (alist-get 'frame_path resp))
-        (embr--hover-start))))
+        (embr--hover-start)
+        (embr--render-start))))
   ;; Show buffer and navigate.
   (switch-to-buffer embr--buffer)
   (embr-navigate url))
