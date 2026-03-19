@@ -1,6 +1,10 @@
 # better-eww
 
-A real web browser inside Emacs. Runs headless Firefox via Playwright, displays rendered pages as screenshots in an Emacs image buffer, and forwards clicks/keys/scroll back to Firefox. Full JS, cookies, sessions, images — the works.
+Browsers started as text renderers (Lynx, w3m, EWW). Then they became multi-gigabyte graphical platforms (Chromium, Firefox).
+
+better-eww runs headless Firefox (~100MB, bundled by Playwright) as a backend. It screenshots the rendered page and streams pixels into an Emacs image buffer. Mouse, keyboard, and scroll events go back to Firefox. Emacs is the display server. Firefox is the renderer.
+
+[Browsh](https://www.brow.sh/) does something similar but converts pages to text/ANSI for terminal output. better-eww keeps the pixels. Discord, Reddit, GitHub, YouTube all load and work.
 
 ## Prerequisites
 
@@ -59,7 +63,7 @@ If you skip this step, `M-x better-eww-browse` will detect the missing venv and 
 
 ### Management commands
 
-All management is done from Emacs — no terminal needed.
+All management is done from Emacs, no terminal needed.
 
 | Command | Description |
 |---------|-------------|
@@ -67,7 +71,7 @@ All management is done from Emacs — no terminal needed.
 | `M-x better-eww-uninstall` | Remove venv, browsers, and browser profile (runs `uninstall.sh`) |
 | `M-x better-eww-info` | Show diagnostic info about the installation |
 
-`better-eww-setup` and `better-eww-update` are aliases for `better-eww-setup-or-update`. The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's always safe to re-run — both for first install and for updates.
+`better-eww-setup` and `better-eww-update` are aliases for `better-eww-setup-or-update`. The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's always safe to re-run for both first install and updates.
 
 ### Where state is stored
 
@@ -87,7 +91,7 @@ M-x better-eww-browse RET https://example.com RET
 
 ## Keybindings
 
-All keys are forwarded directly to the browser — typing, arrows, backspace, tab, enter all work like a normal browser. Click a text box and start typing.
+All keys are forwarded directly to the browser. Typing, arrows, backspace, tab, and enter work as expected.
 
 Browser commands use the `C-c` prefix, keeping `C-x`, `M-x`, etc. free for Emacs.
 
@@ -119,7 +123,7 @@ Standard Emacs bookmarks work: `C-x r m` to save, `C-x r b` to jump.
 
 Emacs spawns a Python subprocess (`better-eww.py`) that controls headless Firefox through Playwright. They communicate via JSON lines over stdin/stdout. The daemon streams JPEG screenshots at ~30 FPS via a temp file on disk, giving live visual feedback.
 
-Browser sessions persist across restarts — cookies and login state are stored in `~/.local/share/better-eww/firefox-profile/`.
+Browser sessions persist across restarts. Cookies and login state are stored in `~/.local/share/better-eww/firefox-profile/`.
 
 ## FAQ
 
@@ -127,7 +131,7 @@ Browser sessions persist across restarts — cookies and login state are stored 
 
 ![Google sign-in blocked](assets/google-sign-in-blocked.png)
 
-Google actively detects and blocks automated/headless browsers. This is a Google-side restriction, not a bug in better-eww. Other major sites that do this include Microsoft and Apple.
+Google detects and blocks automated/headless browsers. This is a Google-side restriction, not a bug. Microsoft and Apple do the same.
 
 **Workarounds:**
 - Use app passwords or sign into Google in a regular browser first, then export/import cookies
@@ -136,8 +140,8 @@ Google actively detects and blocks automated/headless browsers. This is a Google
 
 ### Does audio/video work?
 
-**Video playback works** — at 30-60 FPS (`better-eww-fps`) it's perfectly watchable. YouTube may cut your stream if you're not logged in, but more freedom-respecting video sites work great.
+**Video playback works.** Frame rate depends on `better-eww-fps` (default 30). YouTube may throttle unauthenticated sessions.
 
-**Audio playback works** — headless Firefox routes audio through your system's PulseAudio/PipeWire, so video and music sites play sound normally.
+**Audio playback works.** Headless Firefox routes audio through PulseAudio/PipeWire.
 
-**Mic, camera, and screen sharing do not work.** The headless browser has no access to input devices, so voice/video calls and screen sharing are non-functional. This also means no site can secretly access your mic or camera.
+**Mic, camera, and screen sharing do not work.** Headless Firefox has no access to input devices.
