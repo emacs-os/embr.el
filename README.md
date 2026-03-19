@@ -23,6 +23,8 @@ Emacs is the display server. Headless Firefox is the renderer.
         embr-fps 30                    ; Target frames per second
         embr-default-width 1280         ; Viewport width in pixels
         embr-default-height 720         ; Viewport height in pixels
+        embr-screen-width 1920          ; Screen width reported to websites
+        embr-screen-height 1080         ; Screen height reported to websites
         embr-search-engine 'brave       ; 'brave, 'google, 'duckduckgo, or custom URL with %s
         embr-click-method 'atomic       ; 'atomic or 'immediate (see Configuration below)
         embr-scroll-method 'default     ; 'default or 'smooth (see Configuration below)
@@ -43,6 +45,8 @@ Emacs is the display server. Headless Firefox is the renderer.
         embr-fps 30                    ; Target frames per second
         embr-default-width 1280         ; Viewport width in pixels
         embr-default-height 720         ; Viewport height in pixels
+        embr-screen-width 1920          ; Screen width reported to websites
+        embr-screen-height 1080         ; Screen height reported to websites
         embr-search-engine 'brave       ; 'brave, 'google, 'duckduckgo, or custom URL with %s
         embr-click-method 'atomic       ; 'atomic or 'immediate (see Configuration below)
         embr-scroll-method 'default     ; 'default or 'smooth (see Configuration below)
@@ -91,6 +95,8 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 | `embr-fps` | `30` | Target frames per second |
 | `embr-default-width` | `1280` | Viewport width in pixels |
 | `embr-default-height` | `720` | Viewport height in pixels |
+| `embr-screen-width` | `1920` | Screen width reported to websites (should be >= viewport) |
+| `embr-screen-height` | `1080` | Screen height reported to websites (should be >= viewport) |
 | `embr-search-engine` | `'brave` | `'brave`, `'google`, `'duckduckgo`, or custom URL with `%s` |
 | `embr-click-method` | `'atomic` | Click dispatch method (see below) |
 | `embr-scroll-method` | `'default` | Scroll behavior (see below) |

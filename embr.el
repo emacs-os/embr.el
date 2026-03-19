@@ -54,6 +54,18 @@ alongside the .el in the builds dir, so this just works.")
   "Default viewport height in pixels."
   :type 'integer)
 
+(defcustom embr-screen-width 1920
+  "Screen width reported to websites.
+Should be >= viewport width.  Set to your monitor resolution for a
+realistic browser fingerprint."
+  :type 'integer)
+
+(defcustom embr-screen-height 1080
+  "Screen height reported to websites.
+Should be >= viewport height.  Set to your monitor resolution for a
+realistic browser fingerprint."
+  :type 'integer)
+
 (defcustom embr-fps 30
   "Target frames per second for the screenshot stream."
   :type 'integer)
@@ -951,6 +963,8 @@ If the daemon is already running, just navigate to the new URL."
                  `((cmd . "init")
                    (width . ,embr--viewport-width)
                    (height . ,embr--viewport-height)
+                   (screen_width . ,embr-screen-width)
+                   (screen_height . ,embr-screen-height)
                    (fps . ,embr-fps)
                    (fullscreen_hack . ,(if embr-fullscreen-hack t :json-false))))))
       (if (alist-get 'error resp)

@@ -77,7 +77,8 @@ async def main():
                 str(user_data_dir),
                 headless=True,
                 viewport={"width": width, "height": height},
-                screen={"width": width, "height": height},
+                screen={"width": params.get("screen_width", 1920),
+                        "height": params.get("screen_height", 1080)},
                 accept_downloads=False,
             )
             # Ad blocking via request interception.
@@ -355,13 +356,6 @@ async def main():
         if cmd == "resize":
             w, h = params["width"], params["height"]
             await page.set_viewport_size({"width": w, "height": h})
-            # Keep screen size in sync so Fullscreen API uses viewport dims.
-            await page.evaluate(
-                f"Object.defineProperty(screen,'availWidth',{{get:()=>{w}}});"
-                f"Object.defineProperty(screen,'availHeight',{{get:()=>{h}}});"
-                f"Object.defineProperty(screen,'width',{{get:()=>{w}}});"
-                f"Object.defineProperty(screen,'height',{{get:()=>{h}}});"
-            )
             return {"ok": True}
 
         if cmd == "quit":
