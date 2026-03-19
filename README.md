@@ -125,8 +125,8 @@ Browser commands use the `C-c` prefix.
 | `C-c l` | Go to URL or search (same as `C-l`) |
 | `C-c h` | Follow link (Vimium-style hint labels) |
 | `C-c r` | Refresh |
-| `C-c b` | Back |
-| `C-c f` | Forward |
+| `C-c b` / `C-c C-b` | Back |
+| `C-c f` / `C-c C-f` | Forward |
 | `C-c s` | Search forward (same as `C-s`) |
 | `C-c t` | View page text in a separate buffer |
 | `C-c w` | Copy current URL to kill ring |

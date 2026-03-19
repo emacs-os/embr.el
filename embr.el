@@ -785,6 +785,8 @@ This does NOT remove the Emacs package itself — use your package manager for t
     (define-key map (kbd "C-c f") #'embr-forward)
     (define-key map (kbd "C-c q") #'embr-quit)
     (define-key map (kbd "C-c C-k") #'embr-quit)
+    (define-key map (kbd "C-c C-f") #'embr-forward)
+    (define-key map (kbd "C-c C-b") #'embr-back)
     (define-key map (kbd "C-c +") #'embr-zoom-in)
     (define-key map (kbd "C-c -") #'embr-zoom-out)
     (define-key map (kbd "C-c h") #'embr-follow-hint)
