@@ -66,17 +66,18 @@ Should be >= viewport height.  Set to your monitor resolution for a
 realistic browser fingerprint."
   :type 'integer)
 
-(defcustom embr-fps 30
+(defcustom embr-fps 60
   "Target frames per second for the screenshot stream."
   :type 'integer)
 
-(defcustom embr-external-command "yt-dlp -o - %s | mpv -"
+(defcustom embr-external-command "yt-dlp --cookies-from-browser firefox:~/.local/share/embr/firefox-profile -o - %s | mpv -"
   "Shell command for `embr-play-external'.
 %s is replaced with the current page URL (shell-quoted).
 Examples:
-  \"yt-dlp -o - %s | mpv -\"     — stream via yt-dlp into mpv (default)
-  \"mpv %s\"                      — open directly in mpv
-  \"chromium %s\"                 — open in Chromium"
+  \"yt-dlp --cookies-from-browser firefox:~/.local/share/embr/firefox-profile -o - %s | mpv -\"
+    — stream via yt-dlp into mpv using embr's cookies (default)
+  \"mpv %s\"       — open directly in mpv
+  \"chromium %s\"  — open in Chromium"
   :type 'string)
 
 (defcustom embr-click-method 'atomic

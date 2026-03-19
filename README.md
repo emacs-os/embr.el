@@ -19,7 +19,7 @@ Emacs is the display server. Headless Firefox is the renderer.
            :repo "emacs-os/embr.el"
            :files ("*.el" "*.py" "*.sh"))
   :config
-  (setq embr-fps 30                    ; Target frames per second
+  (setq embr-fps 60                    ; Target FPS (try 30 if your machine struggles)
         embr-default-width 1280         ; Viewport width in pixels
         embr-default-height 720         ; Viewport height in pixels
         embr-screen-width 1920          ; Screen width reported to websites
@@ -27,7 +27,7 @@ Emacs is the display server. Headless Firefox is the renderer.
         embr-search-engine 'brave       ; 'brave, 'google, 'duckduckgo, or custom URL with %s
         embr-click-method 'atomic       ; 'atomic or 'immediate (see Configuration below)
         embr-scroll-method 'smooth      ; 'smooth or 'instant (see Configuration below)
-        embr-external-command "yt-dlp -o - %s | mpv -")) ; Shell command for & key (%s = URL)
+        embr-external-command "yt-dlp --cookies-from-browser firefox:~/.local/share/embr/firefox-profile -o - %s | mpv -")) ; Shell command for & key (%s = URL)
 ```
 
 **straight.el**
@@ -39,7 +39,7 @@ Emacs is the display server. Headless Firefox is the renderer.
              :repo "emacs-os/embr.el"
              :files ("*.el" "*.py" "*.sh"))
   :config
-  (setq embr-fps 30                    ; Target frames per second
+  (setq embr-fps 60                    ; Target FPS (try 30 if your machine struggles)
         embr-default-width 1280         ; Viewport width in pixels
         embr-default-height 720         ; Viewport height in pixels
         embr-screen-width 1920          ; Screen width reported to websites
@@ -47,7 +47,7 @@ Emacs is the display server. Headless Firefox is the renderer.
         embr-search-engine 'brave       ; 'brave, 'google, 'duckduckgo, or custom URL with %s
         embr-click-method 'atomic       ; 'atomic or 'immediate (see Configuration below)
         embr-scroll-method 'smooth      ; 'smooth or 'instant (see Configuration below)
-        embr-external-command "yt-dlp -o - %s | mpv -")) ; Shell command for & key (%s = URL)
+        embr-external-command "yt-dlp --cookies-from-browser firefox:~/.local/share/embr/firefox-profile -o - %s | mpv -")) ; Shell command for & key (%s = URL)
 ```
 
 **Tip:** Make embr your default Emacs browser and enable clickable URLs everywhere:
@@ -89,7 +89,7 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `embr-fps` | `30` | Target frames per second |
+| `embr-fps` | `60` | Target frames per second (try 30 if your machine struggles) |
 | `embr-default-width` | `1280` | Viewport width in pixels |
 | `embr-default-height` | `720` | Viewport height in pixels |
 | `embr-screen-width` | `1920` | Screen width reported to websites (should be >= viewport) |
@@ -97,7 +97,7 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 | `embr-search-engine` | `'brave` | `'brave`, `'google`, `'duckduckgo`, or custom URL with `%s` |
 | `embr-click-method` | `'atomic` | Click dispatch method (see below) |
 | `embr-scroll-method` | `'smooth` | Scroll behavior (see below) |
-| `embr-external-command` | `"yt-dlp -o - %s \| mpv -"` | Shell command for `&` key (`%s` = URL). e.g. `"mpv %s"`, `"chromium %s"` |
+| `embr-external-command` | `"yt-dlp --cookies-from-browser firefox:~/.local/share/embr/firefox-profile -o - %s \| mpv -"` | Shell command for `&` key (`%s` = URL). Uses embr's cookies so logged-in sessions work. |
 
 ### Click methods
 
@@ -194,33 +194,9 @@ Browser sessions persist across restarts. Cookies and login state are stored in 
 
 ## FAQ
 
-### Google won't let me sign in
-
-![Google sign-in blocked](assets/google-sign-in-blocked.png)
-
-Google detects and blocks automated/headless browsers. This is a Google-side restriction, not a bug.
-
-### Cloudflare "Verify you are human" doesn't work
-
-Cloudflare Turnstile detects and blocks headless/automated browsers. The checkbox will not respond regardless of click method. This is a Cloudflare-side restriction, not a bug.
-
-### Will you try to bypass Google/Cloudflare detection?
-
-No. These services suck. We have no plans to play cat-and-mouse with their detection. Just don't use them.
-
-That said, embr does take basic measures to reduce fingerprinting and look like a normal Firefox session:
-
-- `navigator.webdriver` is removed (the main headless browser tell)
-- `navigator.plugins` and `navigator.mimeTypes` report a PDF Viewer (empty arrays are a common detection signal)
-- Screen size defaults to 1920x1080 independent of viewport (real browsers always have screen > viewport)
-- User-Agent is real Firefox (comes from Camoufox's bundled Firefox)
-- Cookies and sessions persist across restarts (real browser profile)
-
-Ultimately, headless browsers are used by a lot of both good and bad bots, and a downside of this approach is that sometimes you'll get treated like one. In practice this mostly only affects large corporate sites (Google, Cloudflare-protected pages). Most of the web works fine — GitHub, Discord, and many others work without issues. We can't be playing cat and mouse trying to make this solution something that it's not.
-
 ### Does audio/video work?
 
-**Video playback works.** Frame rate depends on `embr-fps` (default 30). You might try 60 for smoother video. YouTube may throttle unauthenticated sessions.
+**Video playback works.** Frame rate depends on `embr-fps` (default 60). YouTube may throttle unauthenticated sessions.
 
 **Audio playback works.** Headless Firefox routes audio through PulseAudio/PipeWire.
 

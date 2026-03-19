@@ -36,7 +36,7 @@ async def main():
     page = None
     loop_task = None
     running = True
-    target_fps = 30
+    target_fps = 60
 
     user_data_dir = Path.home() / ".local" / "share" / "embr" / "firefox-profile"
     user_data_dir.mkdir(parents=True, exist_ok=True)
@@ -105,7 +105,7 @@ async def main():
                     else:
                         await route.continue_()
                 await context.route("**/*", block_ads)
-            target_fps = params.get("fps", 30)
+            target_fps = params.get("fps", 60)
             page = context.pages[0] if context.pages else await context.new_page()
             # Force our exact viewport size (camoufox may derive a different one from its fingerprint).
             await page.set_viewport_size({"width": width, "height": height})
