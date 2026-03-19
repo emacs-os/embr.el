@@ -214,7 +214,7 @@ YouTube fullscreen works thanks to `embr-fullscreen-hack` (enabled by default), 
 
 ### Does audio/video work?
 
-**Video playback works.** Frame rate depends on `embr-fps` (default 30). YouTube may throttle unauthenticated sessions.
+**Video playback works.** Frame rate depends on `embr-fps` (default 30). You might try 60 for smoother video. YouTube may throttle unauthenticated sessions.
 
 **Audio playback works.** Headless Firefox routes audio through PulseAudio/PipeWire.
 
