@@ -1,4 +1,4 @@
-# embr
+# embr.el - **Em**acs **Br**owser
 
 embr runs headless Firefox (~100MB, bundled by Playwright) as a backend. It screenshots the rendered page and streams pixels into an Emacs image buffer. Mouse, keyboard, and scroll events go back to Firefox. Emacs is the display server. Firefox is the renderer.
 
