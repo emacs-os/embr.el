@@ -202,3 +202,7 @@ Google detects and blocks automated/headless browsers. This is a Google-side res
 **Audio playback works.** Headless Firefox routes audio through PulseAudio/PipeWire.
 
 **Mic, camera, and screen sharing do not work.** Headless Firefox has no access to input devices.
+
+### YouTube videos error after a few minutes
+
+YouTube detects the headless browser and kills playback. Press `&` to play the video through yt-dlp + mpv instead — it bypasses detection entirely and gives better quality since mpv gets the direct video stream.
