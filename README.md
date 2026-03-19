@@ -1,7 +1,7 @@
 ## embr.el
 **Em**acs **Br**owser
 
-Emacs is the display server. Headless Firefox via [Camoufox](https://camoufox.com/) (anti-detect browser with uBlock Origin built in) is the renderer.
+Emacs is the display server. Headless Firefox via [Camoufox](https://camoufox.com/) is the renderer.
 
 ![embr screenshot](assets/screenshot.png)
 
