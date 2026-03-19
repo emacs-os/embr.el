@@ -148,7 +148,7 @@ All keys are forwarded directly to the browser. Typing, arrows, backspace, tab, 
 
 ### Browser commands
 
-Browser commands use the `C-c` prefix.
+Browser commands use the `C-c` prefix — the same eww-style commands, just behind a prefix instead of on top-level keys. This gives a more natural Firefox typing experience while keeping power tools a combo away.
 
 | Key | Action |
 |-----|--------|
