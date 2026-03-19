@@ -142,7 +142,15 @@ async def main():
 
 
         if cmd == "mousemove":
-            await page.mouse.move(params["x"], params["y"])
+            # Fire-and-forget: don't block the command loop waiting for
+            # the CDP response.  Under high screenshot throughput (60 FPS),
+            # mouse.move() can hang 35s+ starving all other commands.
+            async def _move(x, y):
+                try:
+                    await page.mouse.move(x, y)
+                except Exception:
+                    pass
+            asyncio.create_task(_move(params["x"], params["y"]))
             return {"ok": True}
 
         if cmd == "type":
