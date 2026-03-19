@@ -87,38 +87,29 @@ M-x better-eww-browse RET https://example.com RET
 
 ## Keybindings
 
-### Navigation mode (default)
+All keys are forwarded directly to the browser — typing, arrows, backspace, tab, enter all work like a normal browser. Click a text box and start typing.
+
+Browser commands use the `C-c` prefix, keeping `C-x`, `M-x`, etc. free for Emacs.
 
 | Key | Action |
 |-----|--------|
-| `g` | Go to URL (with history completion) |
-| `f` | Follow link (Vimium-style hint labels) |
-| `r` | Refresh |
-| `B` | Back |
-| `F` | Forward |
-| `s` | Find in page |
-| `t` | View page text in a separate buffer |
-| `w` | Copy current URL to kill ring |
-| `:` | Execute JavaScript |
-| `q` | Quit (kills daemon and buffer) |
-| `+` / `-` | Zoom in / out |
-| `i` | Enter insert mode |
+| `C-c l` | Go to URL (with history completion) |
+| `C-c h` | Follow link (Vimium-style hint labels) |
+| `C-c r` | Refresh |
+| `C-c b` | Back |
+| `C-c f` | Forward |
+| `C-c s` | Find in page |
+| `C-c t` | View page text in a separate buffer |
+| `C-c w` | Copy current URL to kill ring |
+| `C-c :` | Execute JavaScript |
+| `C-c q` | Quit (kills daemon and buffer) |
+| `C-c +` / `C-c -` | Zoom in / out |
+| `C-c n` | Open new tab |
+| `C-c d` | Close current tab |
+| `C-c ]` / `C-c [` | Next / previous tab |
+| `C-c a` | List all tabs |
 | Mouse click | Click at coordinates |
 | Scroll wheel | Scroll page |
-
-### Tabs
-
-| Key | Action |
-|-----|--------|
-| `T` | Open new tab |
-| `d` | Close current tab |
-| `J` | Next tab |
-| `K` | Previous tab |
-| `b` | List all tabs |
-
-### Insert mode
-
-All keystrokes are forwarded to the browser for form input. Press `C-g` to return to navigation mode.
 
 ### Bookmarks
 

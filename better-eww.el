@@ -143,7 +143,6 @@ This does NOT remove the Emacs package itself — use your package manager for t
 (defvar better-eww--buffer nil "The display buffer.")
 (defvar better-eww--response-buffer "" "Accumulator for partial JSON lines from the process.")
 (defvar better-eww--callback nil "Function to call with the next command response.")
-(defvar better-eww--insert-mode nil "Non-nil when insert mode is active.")
 (defvar better-eww--current-url "" "The URL currently displayed.")
 (defvar better-eww--current-title "" "The title of the current page.")
 (defvar better-eww--viewport-width better-eww-default-width "Current viewport width.")
@@ -515,19 +514,7 @@ This does NOT remove the Emacs package itself — use your package manager for t
   "Jump to a better-eww BOOKMARK."
   (better-eww-browse (alist-get 'url (cdr bookmark))))
 
-;; ── Insert mode ────────────────────────────────────────────────────
-
-(defun better-eww-enter-insert-mode ()
-  "Enter insert mode — forward keystrokes to the browser."
-  (interactive)
-  (setq better-eww--insert-mode t)
-  (message "better-eww: INSERT mode (C-g to exit)"))
-
-(defun better-eww-exit-insert-mode ()
-  "Exit insert mode — return to navigation keybindings."
-  (interactive)
-  (setq better-eww--insert-mode nil)
-  (message "better-eww: NAVIGATION mode"))
+;; ── Key forwarding ─────────────────────────────────────────────────
 
 (defun better-eww--translate-key (key)
   "Translate an Emacs KEY description to a Playwright key name."
@@ -539,7 +526,6 @@ This does NOT remove the Emacs package itself — use your package manager for t
     ("<backspace>" "Backspace")
     ("<return>" "Enter")
     ("<tab>" "Tab")
-    ("<escape>" "Escape")
     ("<delete>" "Delete")
     ("<home>" "Home")
     ("<end>" "End")
@@ -552,62 +538,53 @@ This does NOT remove the Emacs package itself — use your package manager for t
     (_ key)))
 
 (defun better-eww-self-insert ()
-  "In insert mode, forward the key to the browser."
+  "Forward the current key to the browser."
   (interactive)
-  (if (not better-eww--insert-mode)
-      (message "better-eww: press 'i' to enter insert mode first")
-    (let* ((keys (this-command-keys-vector))
-           (key-desc (key-description keys))
-           (pw-key (better-eww--translate-key key-desc)))
-      (if (= (length pw-key) 1)
-          (better-eww--send `((cmd . "type") (text . ,pw-key))
-                             #'better-eww--action-callback)
-        (better-eww--send `((cmd . "key") (key . ,pw-key))
-                           #'better-eww--action-callback)))))
+  (let* ((keys (this-command-keys-vector))
+         (key-desc (key-description keys))
+         (pw-key (better-eww--translate-key key-desc)))
+    (if (= (length pw-key) 1)
+        (better-eww--send `((cmd . "type") (text . ,pw-key))
+                           #'better-eww--action-callback)
+      (better-eww--send `((cmd . "key") (key . ,pw-key))
+                         #'better-eww--action-callback))))
 
 ;; ── Keymap ─────────────────────────────────────────────────────────
 
 (defvar better-eww-mode-map
   (let ((map (make-sparse-keymap)))
-    ;; Insert mode: bind all printable characters + special keys FIRST.
-    ;; Explicit navigation bindings below override these for their keys.
+    ;; All printable characters → forward to browser.
     (dolist (c (number-sequence 32 126))
       (define-key map (vector c) #'better-eww-self-insert))
-    (dolist (key '("<return>" "<backspace>" "<tab>" "<escape>" "<delete>"
+    ;; Special keys → forward to browser.
+    (dolist (key '("<return>" "<backspace>" "<tab>" "<delete>"
                    "<home>" "<end>" "<up>" "<down>" "<left>" "<right>"
-                   "<prior>" "<next>"))
+                   "<prior>" "<next>" "<escape>"))
       (define-key map (kbd key) #'better-eww-self-insert))
 
-    ;; Navigation mode bindings (override self-insert for these keys).
-    (define-key map (kbd "g") #'better-eww-navigate)
-    (define-key map (kbd "r") #'better-eww-refresh)
-    (define-key map (kbd "B") #'better-eww-back)
-    (define-key map (kbd "F") #'better-eww-forward)
-    (define-key map (kbd "q") #'better-eww-quit)
-    (define-key map (kbd "+") #'better-eww-zoom-in)
-    (define-key map (kbd "-") #'better-eww-zoom-out)
-    (define-key map (kbd "i") #'better-eww-enter-insert-mode)
-    (define-key map (kbd "C-g") #'better-eww-exit-insert-mode)
-    ;; Link hints.
-    (define-key map (kbd "f") #'better-eww-follow-hint)
-    ;; Text / clipboard.
-    (define-key map (kbd "t") #'better-eww-view-text)
-    (define-key map (kbd "w") #'better-eww-copy-url)
-    ;; Find in page.
-    (define-key map (kbd "s") #'better-eww-find)
-    ;; Tabs.
-    (define-key map (kbd "T") #'better-eww-new-tab)
-    (define-key map (kbd "d") #'better-eww-close-tab)
-    (define-key map (kbd "J") #'better-eww-next-tab)
-    (define-key map (kbd "K") #'better-eww-prev-tab)
-    (define-key map (kbd "b") #'better-eww-list-tabs)
-    ;; JS console.
-    (define-key map (kbd ":") #'better-eww-execute-js)
-
-    ;; Mouse bindings.
+    ;; Mouse → forward to browser.
     (define-key map [mouse-1] #'better-eww-click)
     (define-key map [wheel-down] #'better-eww-scroll-down)
     (define-key map [wheel-up] #'better-eww-scroll-up)
+
+    ;; Browser commands under C-c prefix (Emacs convention for major modes).
+    (define-key map (kbd "C-c l") #'better-eww-navigate)
+    (define-key map (kbd "C-c r") #'better-eww-refresh)
+    (define-key map (kbd "C-c b") #'better-eww-back)
+    (define-key map (kbd "C-c f") #'better-eww-forward)
+    (define-key map (kbd "C-c q") #'better-eww-quit)
+    (define-key map (kbd "C-c +") #'better-eww-zoom-in)
+    (define-key map (kbd "C-c -") #'better-eww-zoom-out)
+    (define-key map (kbd "C-c h") #'better-eww-follow-hint)
+    (define-key map (kbd "C-c t") #'better-eww-view-text)
+    (define-key map (kbd "C-c w") #'better-eww-copy-url)
+    (define-key map (kbd "C-c s") #'better-eww-find)
+    (define-key map (kbd "C-c n") #'better-eww-new-tab)
+    (define-key map (kbd "C-c d") #'better-eww-close-tab)
+    (define-key map (kbd "C-c ]") #'better-eww-next-tab)
+    (define-key map (kbd "C-c [") #'better-eww-prev-tab)
+    (define-key map (kbd "C-c a") #'better-eww-list-tabs)
+    (define-key map (kbd "C-c :") #'better-eww-execute-js)
     map)
   "Keymap for `better-eww-mode'.")
 
@@ -618,7 +595,6 @@ This does NOT remove the Emacs package itself — use your package manager for t
   :group 'better-eww
   (setq-local buffer-read-only t)
   (setq-local cursor-type nil)
-  (setq-local better-eww--insert-mode nil)
   (setq-local bookmark-make-record-function #'better-eww--bookmark-make-record))
 
 ;; ── Entry point ────────────────────────────────────────────────────
