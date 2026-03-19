@@ -71,7 +71,7 @@ All management is done from Emacs, no terminal needed.
 | `M-x better-eww-uninstall` | Remove venv, browsers, and browser profile (runs `uninstall.sh`) |
 | `M-x better-eww-info` | Show diagnostic info about the installation |
 
-`better-eww-setup` and `better-eww-update` are aliases for `better-eww-setup-or-update`. The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's always safe to re-run for both first install and updates.
+The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's always safe to re-run for both first install and updates.
 
 ### Where state is stored
 

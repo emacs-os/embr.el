@@ -81,8 +81,6 @@ Safe to run at any time — rebuilds in a temp venv and swaps atomically."
                (goto-char (point-max))
                (insert "\nDone. You can now run M-x better-eww-browse.\n")))))))))
 
-(defalias 'better-eww-setup #'better-eww-setup-or-update)
-(defalias 'better-eww-update #'better-eww-setup-or-update)
 
 ;;;###autoload
 (defun better-eww-uninstall ()
