@@ -179,8 +179,7 @@ This does NOT remove the Emacs package itself — use your package manager for t
   (let ((venv-dir (expand-file-name ".venv" embr--data-dir))
         (browsers-dir (expand-file-name "camoufox" (or (getenv "XDG_CACHE_HOME")
                                                         (expand-file-name ".cache" "~"))))
-        (profile-dir (expand-file-name "embr" (or (getenv "XDG_DATA_HOME")
-                                                         (expand-file-name ".local/share" "~")))))
+        (profile-dir (expand-file-name "firefox-profile" embr--data-dir)))
     (message "embr installation:
   Source:     %s
   Python:     %s (%s)
@@ -221,15 +220,14 @@ This does NOT remove the Emacs package itself — use your package manager for t
   (when (and embr--process (process-live-p embr--process))
     (delete-process embr--process))
   (setq embr--response-buffer "")
-  (let ((process-environment (cons "PLAYWRIGHT_BROWSERS_PATH=" process-environment)))
-    (setq embr--process
-          (make-process
-           :name "embr"
-           :command (list embr-python embr-script)
-           :connection-type 'pipe
-           :noquery t
-           :filter #'embr--process-filter
-           :sentinel #'embr--process-sentinel))))
+  (setq embr--process
+        (make-process
+         :name "embr"
+         :command (list embr-python embr-script)
+         :connection-type 'pipe
+         :noquery t
+         :filter #'embr--process-filter
+         :sentinel #'embr--process-sentinel)))
 
 (defun embr--process-filter (_proc output)
   "Handle OUTPUT from the daemon process."
