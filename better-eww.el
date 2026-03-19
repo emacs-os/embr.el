@@ -242,6 +242,10 @@ This does NOT remove the Emacs package itself — use your package manager for t
           (let ((inhibit-read-only t))
             (erase-buffer)
             (insert-image (create-image data 'jpeg t))
+            ;; `insert-image' adds `image-map' as a text-property keymap,
+            ;; which steals keys like "i" (prefix for image commands in
+            ;; Emacs 30+).  Remove it so our major-mode map handles all keys.
+            (remove-text-properties (point-min) (point-max) '(keymap nil))
             (goto-char (point-min)))
           (rename-buffer (format "*better-eww: %s*"
                                  (if (string-empty-p title) url title))
