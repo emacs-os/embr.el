@@ -113,27 +113,28 @@ This only needs to be done once after installation or after updating."
   "Remove the Python venv, Playwright browsers, and browser profile.
 This does NOT remove the Emacs package itself — use your package manager for that."
   (interactive)
-  (let ((venv-dir (expand-file-name ".venv" better-eww--directory))
-        (browsers-dir (expand-file-name "ms-playwright" (or (getenv "XDG_CACHE_HOME")
-                                                            (expand-file-name ".cache" "~"))))
-        (profile-dir (expand-file-name "better-eww" (or (getenv "XDG_DATA_HOME")
-                                                         (expand-file-name ".local/share" "~")))))
-    (when (y-or-n-p (format "This will delete:
-  - Python venv:      %s
-  - Playwright browsers: %s
-  - Browser profile:  %s
-
-Proceed? " venv-dir browsers-dir profile-dir))
-      (dolist (dir (list venv-dir profile-dir))
-        (when (file-directory-p dir)
-          (delete-directory dir t)
-          (message "Deleted %s" dir)))
-      ;; Only delete Playwright browsers if no other package uses them.
-      (when (and (file-directory-p browsers-dir)
-                 (y-or-n-p "Also delete Playwright's shared browser cache (~/.cache/ms-playwright)? "))
-        (delete-directory browsers-dir t)
-        (message "Deleted %s" browsers-dir))
-      (message "better-eww: Uninstall complete. Remove the Emacs package with your package manager."))))
+  (let ((script (expand-file-name "uninstall.sh" better-eww--directory)))
+    (unless (file-exists-p script)
+      (error "better-eww: uninstall.sh not found in %s" better-eww--directory))
+    (let ((buf (get-buffer-create "*better-eww-setup*")))
+      (with-current-buffer buf (erase-buffer))
+      (pop-to-buffer buf)
+      (insert (format "Running uninstall.sh in %s ...\n\n" better-eww--directory))
+      ;; Run with yes piped to stdin to auto-confirm (user already confirmed via M-x).
+      (when (y-or-n-p "Remove Python venv and browser profile? ")
+        (let* ((also-browsers (y-or-n-p "Also delete Playwright's shared browser cache (~/.cache/ms-playwright)? "))
+               (input (concat "y\n" (if also-browsers "y\n" "n\n")))
+               (proc (start-process "better-eww-uninstall" buf "bash" "-c"
+                                     (format "echo %s | bash %s"
+                                             (shell-quote-argument input)
+                                             (shell-quote-argument script)))))
+          (set-process-sentinel
+           proc
+           (lambda (_proc event)
+             (when (string-match-p "finished" event)
+               (with-current-buffer (get-buffer "*better-eww-setup*")
+                 (goto-char (point-max))
+                 (insert "\nDone.\n"))))))))))
 
 ;;;###autoload
 (defun better-eww-info ()
