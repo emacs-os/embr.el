@@ -1,10 +1,6 @@
 # better-eww
 
-Browsers started as text renderers (Lynx, w3m, EWW). Then they became multi-gigabyte graphical platforms (Chromium, Firefox).
-
 better-eww runs headless Firefox (~100MB, bundled by Playwright) as a backend. It screenshots the rendered page and streams pixels into an Emacs image buffer. Mouse, keyboard, and scroll events go back to Firefox. Emacs is the display server. Firefox is the renderer.
-
-[Browsh](https://www.brow.sh/) does something similar but converts pages to text/ANSI for terminal output. better-eww keeps the pixels. Discord, Reddit, GitHub, YouTube all load and work.
 
 ## Prerequisites
 
