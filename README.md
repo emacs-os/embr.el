@@ -29,7 +29,7 @@ Emacs is the display server. Headless Firefox is the renderer.
         embr-default-width 1280         ; Viewport width in pixels
         embr-default-height 720         ; Viewport height in pixels
         embr-search-engine 'brave       ; 'brave, 'google, 'duckduckgo, or custom URL with %s
-        embr-click-method 'default      ; 'default or 'atomic (see Configuration below)
+        embr-click-method 'atomic       ; 'atomic or 'immediate (see Configuration below)
         embr-scroll-method 'default     ; 'default or 'smooth (see Configuration below)
         embr-external-command "yt-dlp -o - %s | mpv -")) ; Shell command for & key (%s = URL)
 ```
@@ -48,7 +48,7 @@ Emacs is the display server. Headless Firefox is the renderer.
         embr-default-width 1280         ; Viewport width in pixels
         embr-default-height 720         ; Viewport height in pixels
         embr-search-engine 'brave       ; 'brave, 'google, 'duckduckgo, or custom URL with %s
-        embr-click-method 'default      ; 'default or 'atomic (see Configuration below)
+        embr-click-method 'atomic       ; 'atomic or 'immediate (see Configuration below)
         embr-scroll-method 'default     ; 'default or 'smooth (see Configuration below)
         embr-external-command "yt-dlp -o - %s | mpv -")) ; Shell command for & key (%s = URL)
 ```
@@ -93,7 +93,7 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 | `embr-default-width` | `1280` | Viewport width in pixels |
 | `embr-default-height` | `720` | Viewport height in pixels |
 | `embr-search-engine` | `'brave` | `'brave`, `'google`, `'duckduckgo`, or custom URL with `%s` |
-| `embr-click-method` | `'default` | Click dispatch method (see below) |
+| `embr-click-method` | `'atomic` | Click dispatch method (see below) |
 | `embr-scroll-method` | `'default` | Scroll behavior (see below) |
 | `embr-external-command` | `"yt-dlp -o - %s \| mpv -"` | Shell command for `&` key (`%s` = URL). e.g. `"mpv %s"`, `"chromium %s"` |
 
@@ -101,8 +101,8 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 
 | Method | Behavior |
 |--------|----------|
-| `'default` | Sends mousedown immediately on press, mouseup on release. Standard behavior, works everywhere. |
-| `'atomic` | Defers mousedown until drag is detected. Simple clicks use Playwright's atomic `page.mouse.click()`. Better compatibility with iframe widgets like Cloudflare Turnstile checkboxes. |
+| `'atomic` | Defers mousedown until drag is detected. Simple clicks use Playwright's atomic `page.mouse.click()`. Better compatibility with iframe widgets. |
+| `'immediate` | Sends mousedown instantly on press, mouseup on release. Useful for sites that rely on press-and-hold interactions. |
 
 ### Scroll methods
 
@@ -169,7 +169,7 @@ Browser commands use the `C-c` prefix.
 | `C-c a` | List all tabs |
 | Mouse click | Click at coordinates |
 | Click and drag | Select text |
-| Double-click | Select word |
+
 | Scroll wheel | Scroll page |
 
 ### Bookmarks
@@ -195,6 +195,10 @@ Browser sessions persist across restarts. Cookies and login state are stored in 
 ![Google sign-in blocked](assets/google-sign-in-blocked.png)
 
 Google detects and blocks automated/headless browsers. This is a Google-side restriction, not a bug.
+
+### Cloudflare "Verify you are human" doesn't work
+
+Cloudflare Turnstile detects and blocks headless/automated browsers. The checkbox will not respond regardless of click method. This is a Cloudflare-side restriction, not a bug.
 
 ### Does audio/video work?
 

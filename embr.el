@@ -67,14 +67,14 @@ Examples:
   \"chromium %s\"                 — open in Chromium"
   :type 'string)
 
-(defcustom embr-click-method 'default
+(defcustom embr-click-method 'atomic
   "How mouse clicks are sent to the browser.
-`default' sends separate mousedown/mouseup events (standard behavior).
 `atomic' defers mousedown until drag is detected and uses Playwright's
-atomic click for simple clicks — better compatibility with iframe widgets
-like Cloudflare Turnstile."
-  :type '(choice (const :tag "Default (mousedown/mouseup)" default)
-                 (const :tag "Atomic (single click call)" atomic)))
+atomic click for simple clicks — better compatibility with iframe widgets.
+`immediate' sends mousedown instantly on press, mouseup on release.
+Useful for sites that rely on press-and-hold interactions."
+  :type '(choice (const :tag "Atomic (single click call)" atomic)
+                 (const :tag "Immediate (mousedown/mouseup)" immediate)))
 
 (defcustom embr-scroll-method 'default
   "How scrolling behaves.
@@ -369,10 +369,10 @@ This does NOT remove the Emacs package itself — use your package manager for t
 Dispatch method depends on `embr-click-method'."
   (interactive "e")
   (pcase embr-click-method
-    ('atomic (embr--mouse-atomic event))
-    (_ (embr--mouse-default event))))
+    ('immediate (embr--mouse-immediate event))
+    (_ (embr--mouse-atomic event))))
 
-(defun embr--mouse-default (event)
+(defun embr--mouse-immediate (event)
   "Send mousedown immediately, then mouseup on release."
   (let* ((start-posn (event-start event))
          (start-xy (posn-object-x-y start-posn))
@@ -433,16 +433,6 @@ Better compatibility with iframe widgets like Cloudflare Turnstile."
           (embr--send `((cmd . "click") (x . ,start-x) (y . ,start-y))
                              #'embr--action-callback))))))
 
-(defun embr-double-click (event)
-  "Handle double-click EVENT — select word in browser."
-  (interactive "e")
-  (let* ((posn (event-start event))
-         (xy (posn-object-x-y posn))
-         (x (car xy))
-         (y (cdr xy)))
-    (when (and x y)
-      (embr--send `((cmd . "dblclick") (x . ,x) (y . ,y))
-                         #'embr--action-callback))))
 
 (defun embr--scroll-delta ()
   "Return the scroll delta in pixels based on `embr-scroll-method'."
@@ -847,7 +837,7 @@ Better compatibility with iframe widgets like Cloudflare Turnstile."
 
     ;; Mouse → forward to browser.
     (define-key map [down-mouse-1] #'embr-mouse-handler)
-    (define-key map [double-mouse-1] #'embr-double-click)
+
     (define-key map [wheel-down] #'embr-scroll-down)
     (define-key map [wheel-up] #'embr-scroll-up)
 
