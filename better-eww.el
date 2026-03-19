@@ -109,14 +109,56 @@ This only needs to be done once after installation or after updating."
                (insert "\nUpdate complete.\n")))))))))
 
 ;;;###autoload
+(defun better-eww-uninstall ()
+  "Remove the Python venv, Playwright browsers, and browser profile.
+This does NOT remove the Emacs package itself — use your package manager for that."
+  (interactive)
+  (let ((venv-dir (expand-file-name ".venv" better-eww--directory))
+        (browsers-dir (expand-file-name "ms-playwright" (or (getenv "XDG_CACHE_HOME")
+                                                            (expand-file-name ".cache" "~"))))
+        (profile-dir (expand-file-name "better-eww" (or (getenv "XDG_DATA_HOME")
+                                                         (expand-file-name ".local/share" "~")))))
+    (when (y-or-n-p (format "This will delete:
+  - Python venv:      %s
+  - Playwright browsers: %s
+  - Browser profile:  %s
+
+Proceed? " venv-dir browsers-dir profile-dir))
+      (dolist (dir (list venv-dir profile-dir))
+        (when (file-directory-p dir)
+          (delete-directory dir t)
+          (message "Deleted %s" dir)))
+      ;; Only delete Playwright browsers if no other package uses them.
+      (when (and (file-directory-p browsers-dir)
+                 (y-or-n-p "Also delete Playwright's shared browser cache (~/.cache/ms-playwright)? "))
+        (delete-directory browsers-dir t)
+        (message "Deleted %s" browsers-dir))
+      (message "better-eww: Uninstall complete. Remove the Emacs package with your package manager."))))
+
+;;;###autoload
 (defun better-eww-info ()
   "Show diagnostic info about the better-eww installation."
   (interactive)
-  (message "better-eww directory: %s\nPython: %s (exists: %s)\nScript: %s (exists: %s)\nSetup needed: %s"
-           better-eww--directory
-           better-eww-python (file-exists-p better-eww-python)
-           better-eww-script (file-exists-p better-eww-script)
-           (better-eww--setup-needed-p)))
+  (let ((venv-dir (expand-file-name ".venv" better-eww--directory))
+        (browsers-dir (expand-file-name "ms-playwright" (or (getenv "XDG_CACHE_HOME")
+                                                            (expand-file-name ".cache" "~"))))
+        (profile-dir (expand-file-name "better-eww" (or (getenv "XDG_DATA_HOME")
+                                                         (expand-file-name ".local/share" "~")))))
+    (message "better-eww installation:
+  Source:     %s
+  Python:     %s (%s)
+  Script:     %s (%s)
+  Venv:       %s (%s)
+  Browsers:   %s (%s)
+  Profile:    %s (%s)
+  Setup needed: %s"
+             better-eww--directory
+             better-eww-python (if (file-exists-p better-eww-python) "OK" "MISSING")
+             better-eww-script (if (file-exists-p better-eww-script) "OK" "MISSING")
+             venv-dir (if (file-directory-p venv-dir) "OK" "MISSING")
+             browsers-dir (if (file-directory-p browsers-dir) "OK" "MISSING")
+             profile-dir (if (file-directory-p profile-dir) "exists" "not yet created")
+             (better-eww--setup-needed-p))))
 
 ;; ── Internal state ─────────────────────────────────────────────────
 

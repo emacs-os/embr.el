@@ -61,7 +61,18 @@ If you skip this step, `M-x better-eww-browse` will detect the missing venv and 
 |---------|-------------|
 | `M-x better-eww-setup` | Install Python venv + Playwright + Firefox |
 | `M-x better-eww-update` | Update Playwright and re-download Firefox |
+| `M-x better-eww-uninstall` | Remove venv, browsers, and browser profile |
 | `M-x better-eww-info` | Show diagnostic info about the installation |
+
+### Where state is stored
+
+| What | Path |
+|------|------|
+| Python venv | `<package-dir>/.venv/` |
+| Playwright browsers | `~/.cache/ms-playwright/` |
+| Cookies & sessions | `~/.local/share/better-eww/firefox-profile/` |
+
+`M-x better-eww-uninstall` cleans up all of the above.
 
 ## Usage
 
