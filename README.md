@@ -3,6 +3,8 @@
 
 Emacs is the display server. Headless Firefox via [Camoufox](https://camoufox.com/) (anti-detect browser with uBlock Origin built in) is the renderer.
 
+![embr screenshot](assets/screenshot.png)
+
 ## Prerequisites
 
 - Python 3.10+
