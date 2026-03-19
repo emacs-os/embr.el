@@ -223,6 +223,10 @@ YouTube fullscreen works thanks to `embr-fullscreen-hack` (enabled by default), 
 
 **Mic, camera, and screen sharing do not work.** Headless Firefox has no access to input devices.
 
+### Does this work on macOS?
+
+Unknown — embr is developed and tested on Linux. Playwright and headless Firefox should work on macOS, but no one has tried it yet. If you get it working (or not), please open an issue or PR.
+
 ### YouTube videos error after a few minutes
 
 YouTube detects the headless browser and kills playback. Press `&` to play the video through yt-dlp + mpv instead — it bypasses detection entirely and gives better quality since mpv gets the direct video stream.
