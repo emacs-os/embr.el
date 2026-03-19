@@ -200,6 +200,10 @@ Google detects and blocks automated/headless browsers. This is a Google-side res
 
 Cloudflare Turnstile detects and blocks headless/automated browsers. The checkbox will not respond regardless of click method. This is a Cloudflare-side restriction, not a bug.
 
+### Will you try to bypass Google/Cloudflare detection?
+
+No. Services that block headless browsers suck. We have no plans to play cat-and-mouse with their detection. Just don't use them. There are better alternatives that don't treat their users like bots.
+
 ### Fullscreen video
 
 YouTube fullscreen works thanks to `embr-fullscreen-hack` (enabled by default), which intercepts the Fullscreen API and fakes it with CSS fixed positioning. YouTube without being logged in can still be uncooperative — throttling, interruptions, etc.
