@@ -223,6 +223,10 @@ YouTube fullscreen works thanks to `embr-fullscreen-hack` (enabled by default), 
 
 **Mic, camera, and screen sharing do not work.** Headless Firefox has no access to input devices.
 
+### Will you add vim-like modal keybindings (like Vimium)?
+
+No plans to add this upstream, but PRs are welcome. If you implement it, gate it behind a `defcustom` (e.g. `embr-keymap-style` with `'default` and `'modal` options) and make sure the default behavior is unchanged. Do not break existing keybindings.
+
 ### Does this work on macOS?
 
 Unknown — embr is developed and tested on Linux. Playwright and headless Firefox should work on macOS, but no one has tried it yet. If you get it working (or not), please open an issue or PR.
