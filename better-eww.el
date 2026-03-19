@@ -89,7 +89,7 @@ string with %s for the query."
 
 ;;;###autoload
 (defun better-eww-setup-or-update ()
-  "Run setup.sh to install or update the Python venv, Playwright, and Firefox.
+  "Run setup.sh to install or update the Python venv, Playwright, Firefox, and ad blocklist.
 Safe to run at any time — rebuilds in a temp venv and swaps atomically."
   (interactive)
   (let ((setup-script (expand-file-name "setup.sh" better-eww--directory)))

@@ -76,7 +76,7 @@ All management is done from Emacs, no terminal needed.
 
 | Command | Description |
 |---------|-------------|
-| `M-x better-eww-setup-or-update` | Install or update venv + Playwright + Firefox (runs `setup.sh`) |
+| `M-x better-eww-setup-or-update` | Install or update venv + Playwright + Firefox + ad blocklist (runs `setup.sh`) |
 | `M-x better-eww-uninstall` | Remove venv, browsers, and browser profile (runs `uninstall.sh`) |
 | `M-x better-eww-info` | Show diagnostic info about the installation |
 
