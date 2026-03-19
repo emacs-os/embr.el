@@ -1,6 +1,6 @@
-# better-eww
+# embr
 
-better-eww runs headless Firefox (~100MB, bundled by Playwright) as a backend. It screenshots the rendered page and streams pixels into an Emacs image buffer. Mouse, keyboard, and scroll events go back to Firefox. Emacs is the display server. Firefox is the renderer.
+embr runs headless Firefox (~100MB, bundled by Playwright) as a backend. It screenshots the rendered page and streams pixels into an Emacs image buffer. Mouse, keyboard, and scroll events go back to Firefox. Emacs is the display server. Firefox is the renderer.
 
 ## Prerequisites
 
@@ -18,32 +18,32 @@ better-eww runs headless Firefox (~100MB, bundled by Playwright) as a backend. I
 <td>
 
 ```elisp
-(use-package better-eww
+(use-package embr
   :defer t
   :ensure (:host github
-           :repo "emacs-os/better-eww"
+           :repo "emacs-os/embr"
            :files ("*.el" "*.py" "*.sh"))
   :config
-  (setq better-eww-fps 30
-        better-eww-default-width 1280
-        better-eww-default-height 720
-        better-eww-search-engine 'brave))
+  (setq embr-fps 30
+        embr-default-width 1280
+        embr-default-height 720
+        embr-search-engine 'brave))
 ```
 
 </td>
 <td>
 
 ```elisp
-(use-package better-eww
+(use-package embr
   :defer t
   :straight (:host github
-             :repo "emacs-os/better-eww"
+             :repo "emacs-os/embr"
              :files ("*.el" "*.py" "*.sh"))
   :config
-  (setq better-eww-fps 30
-        better-eww-default-width 1280
-        better-eww-default-height 720
-        better-eww-search-engine 'brave))
+  (setq embr-fps 30
+        embr-default-width 1280
+        embr-default-height 720
+        embr-search-engine 'brave))
 ```
 
 </td>
@@ -53,22 +53,22 @@ better-eww runs headless Firefox (~100MB, bundled by Playwright) as a backend. I
 ### Manual
 
 ```bash
-git clone https://github.com/emacs-os/better-eww.git
-cd better-eww
+git clone https://github.com/emacs-os/embr.git
+cd embr
 bash setup.sh
 ```
 
 Then in your config:
 
 ```elisp
-(load-file "/path/to/better-eww/better-eww.el")
+(load-file "/path/to/embr/embr.el")
 ```
 
 ## Setup
 
-After installing, run `M-x better-eww-setup-or-update` to create the Python venv and download Playwright's bundled Firefox (~100MB).
+After installing, run `M-x embr-setup-or-update` to create the Python venv and download Playwright's bundled Firefox (~100MB).
 
-If you skip this step, `M-x better-eww-browse` will detect the missing venv and offer to run setup for you automatically.
+If you skip this step, `M-x embr-browse` will detect the missing venv and offer to run setup for you automatically.
 
 ### Management commands
 
@@ -76,9 +76,9 @@ All management is done from Emacs, no terminal needed.
 
 | Command | Description |
 |---------|-------------|
-| `M-x better-eww-setup-or-update` | Install or update venv + Playwright + Firefox + ad blocklist (runs `setup.sh`) |
-| `M-x better-eww-uninstall` | Remove venv, browsers, and browser profile (runs `uninstall.sh`) |
-| `M-x better-eww-info` | Show diagnostic info about the installation |
+| `M-x embr-setup-or-update` | Install or update venv + Playwright + Firefox + ad blocklist (runs `setup.sh`) |
+| `M-x embr-uninstall` | Remove venv, browsers, and browser profile (runs `uninstall.sh`) |
+| `M-x embr-info` | Show diagnostic info about the installation |
 
 The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's always safe to re-run for both first install and updates.
 
@@ -86,26 +86,26 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 
 | What | Path |
 |------|------|
-| Python venv | `~/.local/share/better-eww/.venv/` |
+| Python venv | `~/.local/share/embr/.venv/` |
 | Playwright browsers | `~/.cache/ms-playwright/` |
-| Cookies & sessions | `~/.local/share/better-eww/firefox-profile/` |
+| Cookies & sessions | `~/.local/share/embr/firefox-profile/` |
 
-`M-x better-eww-uninstall` cleans up all of the above.
+`M-x embr-uninstall` cleans up all of the above.
 
 ## Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `better-eww-fps` | `30` | Target frames per second |
-| `better-eww-default-width` | `1280` | Viewport width in pixels |
-| `better-eww-default-height` | `720` | Viewport height in pixels |
-| `better-eww-search-engine` | `'brave` | `'brave`, `'google`, `'duckduckgo`, or a custom URL string with `%s` |
-| `better-eww-external-player` | `"mpv"` | Media player for `&` key (receives yt-dlp output via pipe) |
+| `embr-fps` | `30` | Target frames per second |
+| `embr-default-width` | `1280` | Viewport width in pixels |
+| `embr-default-height` | `720` | Viewport height in pixels |
+| `embr-search-engine` | `'brave` | `'brave`, `'google`, `'duckduckgo`, or a custom URL string with `%s` |
+| `embr-external-player` | `"mpv"` | Media player for `&` key (receives yt-dlp output via pipe) |
 
 ## Usage
 
 ```
-M-x better-eww-browse RET https://example.com RET
+M-x embr-browse RET https://example.com RET
 ```
 
 ## Keybindings
@@ -170,13 +170,13 @@ Standard Emacs bookmarks work: `C-x r m` to save, `C-x r b` to jump.
 
 Built-in domain-level ad blocking using the [StevenBlack/hosts](https://github.com/StevenBlack/hosts) blocklist (~82K ad and tracker domains). Requests to blocked domains are intercepted and killed before they hit the network.
 
-The blocklist is downloaded automatically by `setup.sh` and refreshed every time you run `M-x better-eww-setup-or-update`. No extensions or extra configuration needed.
+The blocklist is downloaded automatically by `setup.sh` and refreshed every time you run `M-x embr-setup-or-update`. No extensions or extra configuration needed.
 
 ## How It Works
 
-Emacs spawns a Python subprocess (`better-eww.py`) that controls headless Firefox through Playwright. They communicate via JSON lines over stdin/stdout. The daemon streams JPEG screenshots at ~30 FPS via a temp file on disk, giving live visual feedback.
+Emacs spawns a Python subprocess (`embr.py`) that controls headless Firefox through Playwright. They communicate via JSON lines over stdin/stdout. The daemon streams JPEG screenshots at ~30 FPS via a temp file on disk, giving live visual feedback.
 
-Browser sessions persist across restarts. Cookies and login state are stored in `~/.local/share/better-eww/firefox-profile/`.
+Browser sessions persist across restarts. Cookies and login state are stored in `~/.local/share/embr/firefox-profile/`.
 
 ## FAQ
 
@@ -188,7 +188,7 @@ Google detects and blocks automated/headless browsers. This is a Google-side res
 
 ### Does audio/video work?
 
-**Video playback works.** Frame rate depends on `better-eww-fps` (default 30). YouTube may throttle unauthenticated sessions.
+**Video playback works.** Frame rate depends on `embr-fps` (default 30). YouTube may throttle unauthenticated sessions.
 
 **Audio playback works.** Headless Firefox routes audio through PulseAudio/PipeWire.
 
