@@ -28,6 +28,7 @@ Emacs is the display server. Headless Firefox via [Camoufox](https://camoufox.co
         embr-default-height 720
         embr-screen-width 1920
         embr-screen-height 1080
+        embr-color-scheme 'dark
         embr-search-engine 'google
         embr-click-method 'atomic
         embr-scroll-method 'instant
@@ -51,6 +52,7 @@ Emacs is the display server. Headless Firefox via [Camoufox](https://camoufox.co
         embr-default-height 720
         embr-screen-width 1920
         embr-screen-height 1080
+        embr-color-scheme 'dark
         embr-search-engine 'google
         embr-click-method 'atomic
         embr-scroll-method 'instant
@@ -104,6 +106,7 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 | `embr-default-height` | integer | `720` | Viewport height in pixels |
 | `embr-screen-width` | integer | `1920` | Screen width reported to websites (should be >= viewport) |
 | `embr-screen-height` | integer | `1080` | Screen height reported to websites (should be >= viewport) |
+| `embr-color-scheme` | symbol/nil | `'dark` | `'dark`, `'light`, or `nil` to let Camoufox choose. Controls `prefers-color-scheme`. |
 | `embr-search-engine` | symbol/string | `'google` | `'google`, `'brave`, `'duckduckgo`, or custom URL with `%s` |
 | `embr-click-method` | symbol | `'atomic` | `'atomic` defers mousedown until drag detected, better iframe compat. `'immediate` sends mousedown instantly, for press-and-hold sites. |
 | `embr-scroll-method` | symbol | `'instant` | `'smooth` scrolls with CSS animation. `'instant` scrolls instantly, line-by-line feel. |

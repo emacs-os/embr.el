@@ -114,6 +114,14 @@ Useful for sites that rely on press-and-hold interactions."
   :type 'integer)
 
 
+(defcustom embr-color-scheme 'dark
+  "Browser color scheme preference.
+Controls `prefers-color-scheme' CSS media query.  Set to nil to let
+Camoufox choose from its fingerprint profile."
+  :type '(choice (const :tag "Dark" dark)
+                 (const :tag "Light" light)
+                 (const :tag "Auto (Camoufox default)" nil)))
+
 (defcustom embr-search-engine 'google
   "Search engine for URL bar queries.
 Can be a symbol (`brave', `google', `duckduckgo') or a custom URL
@@ -980,7 +988,10 @@ If the daemon is already running, just navigate to the new URL."
                    (screen_width . ,embr-screen-width)
                    (screen_height . ,embr-screen-height)
                    (fps . ,embr-fps)
-                   (jpeg_quality . ,embr-jpeg-quality)))))
+                   (jpeg_quality . ,embr-jpeg-quality)
+                   ,@(when embr-color-scheme
+                       `((color_scheme . ,(symbol-name embr-color-scheme))))))))
+
       (if (alist-get 'error resp)
           (error "embr: init failed: %s" (alist-get 'error resp))
         ;; Daemon tells us where it writes frames.

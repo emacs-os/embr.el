@@ -109,8 +109,7 @@ async def main():
             height = params.get("height", 720)
             sw = params.get("screen_width", 1920)
             sh = params.get("screen_height", 1080)
-            context = await AsyncNewBrowser(
-                pw,
+            browser_opts = dict(
                 persistent_context=True,
                 user_data_dir=str(user_data_dir),
                 headless=True,
@@ -121,6 +120,17 @@ async def main():
                 os="linux",
                 accept_downloads=False,
             )
+            color_scheme = params.get("color_scheme")
+            if color_scheme:
+                browser_opts["color_scheme"] = color_scheme
+                # Reinforce via Firefox prefs in case Playwright's context-level
+                # setting is overridden by Camoufox's fingerprint.
+                prefs = {"layout.css.prefers-color-scheme.content-override":
+                         1 if color_scheme == "light" else 0,
+                         "ui.systemUsesDarkTheme":
+                         0 if color_scheme == "light" else 1}
+                browser_opts["firefox_user_prefs"] = prefs
+            context = await AsyncNewBrowser(pw, **browser_opts)
             # Ad blocking via request interception.
             blocked = load_blocklist()
             if blocked:
