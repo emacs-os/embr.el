@@ -18,7 +18,4 @@ checkpy:
 shellcheck:
 	$(SHELLCHECK) setup.sh uninstall.sh && echo "OK: shell scripts pass shellcheck"
 
-booster:
-	$(MAKE) -C libexec
-
-.PHONY: test check checkparens bytecompile checkpy shellcheck booster
+.PHONY: test check checkparens bytecompile checkpy shellcheck

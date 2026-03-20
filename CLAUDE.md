@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**embr.el** is an Emacs browser that uses headless Firefox (via Camoufox) as its rendering engine. Emacs acts as the display server showing JPEG screenshots, while a Python daemon handles browser automation.
+**embr.el** is an Emacs browser that uses headless Chromium (via CloakBrowser) as its rendering engine. Emacs acts as the display server showing JPEG screenshots, while a Python daemon handles browser automation.
 
 ## Architecture
 
@@ -12,15 +12,15 @@ Client-server over JSON lines on stdin/stdout:
 
 ```
 Emacs (embr.el) ←→ JSON over stdin/stdout ←→ Python daemon (embr.py)
-  UI / keybindings                            Playwright/Camoufox browser control
+  UI / keybindings                            Playwright/CloakBrowser browser control
   Image display                               JPEG screenshot loop → /tmp/embr-frame.jpg
 ```
 
 **embr.el** (~930 lines): Emacs Lisp major mode with process management, async JSON protocol, frame display, keybinding translation, link hints, tab management, bookmarks integration.
 
-**embr.py** (~330 lines): asyncio-based daemon using Camoufox (Playwright API). Handles browser commands, screenshot capture loop, domain-level ad blocking (blocklist.txt), and form interaction.
+**embr.py** (~330 lines): asyncio-based daemon using CloakBrowser (Playwright API). Handles browser commands, screenshot capture loop, domain-level ad blocking (blocklist.txt), and form interaction.
 
-**setup.sh**: Creates Python venv at `~/.local/share/embr/.venv/`, installs `camoufox[geoip]`, downloads browser, fetches StevenBlack/hosts blocklist. Builds in temp venv and swaps atomically.
+**setup.sh**: Creates Python venv at `~/.local/share/embr/.venv/`, installs `cloakbrowser[geoip]`, downloads browser, fetches StevenBlack/hosts blocklist. Builds in temp venv and swaps atomically.
 
 ## Key Design Patterns
 
@@ -28,7 +28,7 @@ Emacs (embr.el) ←→ JSON over stdin/stdout ←→ Python daemon (embr.py)
 - **Frame streaming**: Python writes JPEG to temp file then renames atomically. Emacs reads the file on each frame notification. Frame batching skips intermediate frames if the UI can't keep up.
 - **Async with callbacks**: `embr--send` dispatches commands with optional callback. `embr--send-sync` blocks via `accept-process-output` for synchronous results.
 - **Dual click modes**: `atomic` defers mousedown until drag is detected (better iframe compat); `immediate` sends mousedown instantly.
-- **Ad blocking**: Two layers — uBlock Origin (built into Camoufox) + domain-level route interception from blocklist.txt (~82K domains).
+- **Ad blocking**: Domain-level route interception from blocklist.txt (~82K domains).
 
 ## Development Notes
 
@@ -36,7 +36,7 @@ Emacs (embr.el) ←→ JSON over stdin/stdout ←→ Python daemon (embr.py)
 - No linter/formatter configuration. Emacs Lisp follows GNU conventions; Python is PEP-ish.
 - `blocklist.txt` is in `.gitignore` — it's downloaded by `setup.sh`, not checked in.
 - Emacs 30.1+ required (native JSON parser). Python 3.10+ required.
-- Browser profile persists at `~/.local/share/embr/firefox-profile/`.
+- Browser profile persists at `~/.local/share/embr/chromium-profile/`.
 
 ## Git Policy
 

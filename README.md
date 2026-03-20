@@ -19,7 +19,7 @@ Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakb
   :defer t
   :ensure (:host github
            :repo "emacs-os/embr.el"
-           :files ("*.el" "*.py" "*.sh" "libexec/*.c"))
+           :files ("*.el" "*.py" "*.sh"))
   :config
   (setq embr-fps 60
         embr-jpeg-quality 80
@@ -31,9 +31,9 @@ Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakb
         embr-color-scheme 'dark
         embr-search-engine 'google
         embr-click-method 'immediate
-        embr-scroll-method 'instant
-        embr-scroll-step 120
-        embr-dom-caret-hack nil
+        embr-scroll-method 'smooth
+        embr-scroll-step 300
+        embr-dom-caret-hack t
         embr-perf-log nil
         embr-input-priority-window-ms 35
         embr-adaptive-capture t
@@ -42,8 +42,7 @@ Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakb
         embr-hover-move-threshold-px 0
         embr-hover-rate-min 14
         embr-external-command "yt-dlp -o - %s | mpv -"
-        embr-booster nil
-        embr-booster-args nil))
+))
 ```
 
 **straight.el**
@@ -53,7 +52,7 @@ Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakb
   :defer t
   :straight (:host github
              :repo "emacs-os/embr.el"
-             :files ("*.el" "*.py" "*.sh" "libexec/*.c"))
+             :files ("*.el" "*.py" "*.sh"))
   :config
   (setq embr-fps 60
         embr-jpeg-quality 80
@@ -65,9 +64,9 @@ Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakb
         embr-color-scheme 'dark
         embr-search-engine 'google
         embr-click-method 'immediate
-        embr-scroll-method 'instant
-        embr-scroll-step 120
-        embr-dom-caret-hack nil
+        embr-scroll-method 'smooth
+        embr-scroll-step 300
+        embr-dom-caret-hack t
         embr-perf-log nil
         embr-input-priority-window-ms 35
         embr-adaptive-capture t
@@ -76,8 +75,7 @@ Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakb
         embr-hover-move-threshold-px 0
         embr-hover-rate-min 14
         embr-external-command "yt-dlp -o - %s | mpv -"
-        embr-booster nil
-        embr-booster-args nil))
+))
 ```
 
 **Tip:** Make embr your default Emacs browser and enable clickable URLs everywhere:
@@ -99,9 +97,8 @@ All management is done from Emacs, no terminal needed.
 
 | Command | Description |
 |---------|-------------|
-| `M-x embr-setup-or-update` | Install or update venv + CloakBrowser + ad blocklist + compile booster (runs `setup.sh`) |
-| `M-x embr-build-booster` | Compile the embr-booster C proxy (requires a C compiler) |
-| `M-x embr-uninstall` | Remove venv, browser profile, and booster binary; optionally delete browser cache (runs `uninstall.sh`) |
+| `M-x embr-setup-or-update` | Install or update venv + CloakBrowser + ad blocklist (runs `setup.sh`) |
+| `M-x embr-uninstall` | Remove venv and browser profile; optionally delete browser cache (runs `uninstall.sh`) |
 | `M-x embr-info` | Show diagnostic info about the installation |
 
 The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's always safe to re-run for both first install and updates.
@@ -111,11 +108,10 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 | What | Path (0.40+) | Path (0.30) |
 |------|--------------|-------------|
 | Python venv | `~/.local/share/embr/.venv/` | same |
-| Booster binary | `~/.local/share/embr/embr-booster` | same |
 | Browser binary | `~/.cache/cloakbrowser/` | `~/.cache/camoufox/` |
 | Cookies & sessions | `~/.local/share/embr/chromium-profile/` | `~/.local/share/embr/firefox-profile/` |
 
-`M-x embr-uninstall` removes the venv, profile, and booster; browser cache deletion is offered as an optional prompt.
+`M-x embr-uninstall` removes the venv and profile; browser cache deletion is offered as an optional prompt.
 
 ### Migrating from 0.30 to 0.40
 
@@ -147,9 +143,9 @@ rm -rf ~/.local/share/embr ~/.cache/camoufox
 | `embr-color-scheme` | symbol/nil | `'dark` | `'dark`, `'light`, or `nil` to let CloakBrowser choose. Controls `prefers-color-scheme`. |
 | `embr-search-engine` | symbol/string | `'google` | `'google`, `'brave`, `'duckduckgo`, or custom URL with `%s` |
 | `embr-click-method` | symbol | `'immediate` | `'atomic` defers mousedown until drag detected, better iframe compat. `'immediate` sends mousedown instantly, for press-and-hold sites. |
-| `embr-scroll-method` | symbol | `'instant` | `'smooth` scrolls with CSS animation. `'instant` scrolls instantly, line-by-line feel. |
-| `embr-scroll-step` | integer | `120` | Scroll distance in pixels per wheel notch |
-| `embr-dom-caret-hack` | boolean | `nil` | Inject a fake DOM caret in focused text fields. CDP screenshots don't capture the native caret. |
+| `embr-scroll-method` | symbol | `'smooth` | `'smooth` scrolls with CSS animation. `'instant` scrolls instantly, line-by-line feel. |
+| `embr-scroll-step` | integer | `300` | Scroll distance in pixels per wheel notch |
+| `embr-dom-caret-hack` | boolean | `t` | Inject a fake DOM caret in focused text fields. CDP screenshots don't capture the native caret. |
 | `embr-perf-log` | boolean | `nil` | Write JSONL perf events to `/tmp/embr-perf.jsonl`. Analyze with `tools/embr-perf-report.py`. |
 | `embr-input-priority-window-ms` | integer | `35` | Milliseconds to suppress frame capture after interactive input. Frees CDP pipe for input commands. 0 to disable. |
 | `embr-adaptive-capture` | boolean | `t` | Auto-tune FPS and JPEG quality based on capture cost. Lowers when over budget, recovers when stable. |
@@ -158,9 +154,6 @@ rm -rf ~/.local/share/embr ~/.cache/camoufox
 | `embr-hover-move-threshold-px` | integer | `0` | Minimum pixel distance before sending a hover update. Filters sub-pixel jitter. |
 | `embr-hover-rate-min` | integer | `14` | Minimum hover rate (Hz) under load pressure. Hover self-throttles from `embr-hover-rate` to this. |
 | `embr-external-command` | string | yt-dlp + mpv | Shell command for `&` key (`%s` = URL). Default pipes through yt-dlp into mpv. |
-| `embr-booster` | boolean | `nil` | When non-nil, launch embr-booster C proxy between Emacs and embr.py for priority scheduling. |
-| `embr-booster-path` | file | `~/.local/share/embr/embr-booster` | Path to the compiled embr-booster binary. |
-| `embr-booster-args` | list | `nil` | Additional CLI arguments for embr-booster (e.g. `("--log-level" "debug")`). |
 
 ## Usage
 
@@ -267,25 +260,6 @@ The keyboard flow does not hit the deadlock conditions because:
 The mouse deadlock chain was always: sustained hover traffic (20 Hz) + screenshot traffic (60 Hz) = saturated pipe → any additional CDP Input call hangs → cascading failure. Keyboard-only removes the sustained part entirely. You go from ~80 CDP calls/sec (60 screenshot + 20 hover) down to ~60 (just screenshots) with occasional key presses that slip through the gaps.
 
 The full keyboard flow: `C-n`/`C-p` to scroll, `C-c h` for Vimium-style link hints, `Tab` to cycle form fields, `C-s` to find text, `C-c l` to navigate. See [Keybindings](#keybindings) for the complete list.
-
-### embr-booster (optional C transport)
-
-For lower latency under high load (video + mouse input), embr includes an optional C proxy called embr-booster that sits between Emacs and embr.py:
-
-```
-Emacs ←→ embr-booster (C) ←→ embr.py
-```
-
-The booster provides:
-- **Priority scheduling**: navigation/input commands (P0/P1) drain before mousemove (P2) and frames (P3)
-- **Message coalescing**: consecutive mousemoves and frame notifications collapse to the latest
-- **Input-priority windowing**: frames are suppressed briefly after interactive input to free the pipe
-- **Frame rate limiting**: caps frame forwarding under pressure
-- **Backpressure**: bounded queues prevent unbounded memory growth
-
-The booster is compiled automatically by `setup.sh` if a C compiler is available. If the binary is missing when you launch `embr-browse` with `embr-booster` set to `t`, Emacs will offer to compile it for you. The booster is protocol-transparent — same JSON lines, just reordered and coalesced. If compilation isn't possible, embr falls back to direct mode with a warning.
-
-**Known side effect:** During video playback, clicks may not register if the mouse is moving. The hover timer sends CDP `page.mouse.move()` at `embr-hover-rate` Hz, which competes for pipe bandwidth with the click's `page.evaluate()` call. Workaround: hold the mouse still, then click. This tradeoff exists to prevent CDP deadlocks that would otherwise freeze all input indefinitely. Improving this is ongoing.
 
 ## FAQ
 

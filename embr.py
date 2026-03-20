@@ -103,42 +103,16 @@ async def main():
     user_data_dir = Path.home() / ".local" / "share" / "embr" / "chromium-profile"
     user_data_dir.mkdir(parents=True, exist_ok=True)
 
-    booster_active = os.environ.get("EMBR_FRAME_FD") == "1"
-    print(f"embr: engine=cloakbrowser booster={'on' if booster_active else 'off'}",
-          file=sys.stderr)
-
-    # Frame notification routing:
-    # - EMBR_FRAME_FD=1 (set by booster): use fd 3 as out-of-band frame pipe.
-    # - Otherwise: frames go to stdout (direct mode, no booster).
-    # - _suppress_frames command: booster tells us inotify is active,
-    #   stop emitting frame notifications entirely.
-    _frame_channel = None
-    _frames_suppressed = False
-    if os.environ.get("EMBR_FRAME_FD") == "1":
-        try:
-            os.fstat(3)
-            _frame_channel = os.fdopen(3, "w", buffering=1)
-            print("embr: using out-of-band frame channel (fd 3)", file=sys.stderr)
-        except OSError:
-            pass
+    print("embr: engine=cloakbrowser", file=sys.stderr)
 
     def emit(obj):
         sys.stdout.write(json.dumps(obj) + "\n")
         sys.stdout.flush()
 
     def emit_frame(obj):
-        """Emit a frame notification on the appropriate channel.
-        When frames are suppressed (inotify active in booster),
-        this is a no-op."""
-        if _frames_suppressed:
-            return
-        line = json.dumps(obj) + "\n"
-        if _frame_channel:
-            _frame_channel.write(line)
-            _frame_channel.flush()
-        else:
-            sys.stdout.write(line)
-            sys.stdout.flush()
+        """Emit a frame notification on stdout."""
+        sys.stdout.write(json.dumps(obj) + "\n")
+        sys.stdout.flush()
 
     async def write_frame():
         """Take a JPEG screenshot, write atomically to disk, notify Emacs."""
@@ -706,32 +680,6 @@ else document.addEventListener('DOMContentLoaded', embrStartCaret);
             params = {k: v for k, v in msg.items() if k != "cmd"}
             cid = perf.next_cmd_id()
             perf.log("cmd_receive", cmd=cmd, cmd_id=cid)
-            # Booster pressure hint: internal signal, no response emitted.
-            # Handled here (not in handle()) to avoid generating a response
-            # that would desync the single-callback slot in embr.el.
-            if cmd == "_booster_hint":
-                desired = params.get("desired_fps", 0)
-                shed = params.get("frame_shed_level", 0)
-                if desired > 0:
-                    target_fps = max(fps_min, min(fps_max, desired))
-                elif shed == 0:
-                    target_fps = fps_max
-                perf.log("booster_hint", desired_fps=desired,
-                         frame_shed_level=shed, applied_fps=target_fps)
-                continue
-            # Booster tells us inotify is handling frame detection.
-            # Suppress all frame emission and close fd 3 if open.
-            if cmd == "_suppress_frames":
-                _frames_suppressed = True
-                if _frame_channel:
-                    try:
-                        _frame_channel.close()
-                    except OSError:
-                        pass
-                print("embr: frame emit suppressed (booster inotify active)",
-                      file=sys.stderr)
-                perf.log("frames_suppressed")
-                continue
             if cmd in PerfLog.INTERACTIVE_CMDS:
                 perf.last_interactive_input_ts = time.monotonic()
                 # mousemove is passive hover tracking — it should not

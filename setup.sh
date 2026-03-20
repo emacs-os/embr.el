@@ -44,22 +44,4 @@ curl -sL "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts" \
 mv "$BLOCKLIST.tmp" "$BLOCKLIST"
 echo "Blocklist: $(wc -l < "$BLOCKLIST") domains"
 
-# Compile embr-booster (C transport proxy) if a C compiler is available.
-# Binary goes into DATA_DIR (alongside the venv), source stays in package dir.
-# Source may be under libexec/ (repo) or flat (elpaca/straight build dir).
-BOOSTER_SRC="$SCRIPT_DIR/libexec/embr-booster.c"
-[ -f "$BOOSTER_SRC" ] || BOOSTER_SRC="$SCRIPT_DIR/embr-booster.c"
-BOOSTER_BIN="$DATA_DIR/embr-booster"
-if [ -f "$BOOSTER_SRC" ]; then
-    CC="${CC:-cc}"
-    if command -v "$CC" >/dev/null 2>&1; then
-        echo "Compiling embr-booster..."
-        "$CC" -O2 -std=c11 -Wall -o "$BOOSTER_BIN" "$BOOSTER_SRC" && \
-            echo "embr-booster compiled to $BOOSTER_BIN" || \
-            echo "WARNING: embr-booster compilation failed (optional, embr works without it)." >&2
-    else
-        echo "No C compiler found — skipping embr-booster (optional)."
-    fi
-fi
-
 echo "Setup complete. CloakBrowser is ready."

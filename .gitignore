@@ -4,5 +4,4 @@ __pycache__/
 *.elc
 blocklist.txt
 reports/
-libexec/embr-booster
 dogshit
