@@ -44,7 +44,7 @@ Never stage, commit, or push unless explicitly told to do so. Any such instructi
 
 ## Validation
 
-After modifying code, always run `make test` before finishing. This runs `make checkparens` (balanced parens in embr.el) and `make checkpy` (Python syntax check on embr.py). Do not consider the task complete if any check fails.
+After modifying code, always run `make test` before finishing. Do not consider the task complete if any check fails.
 
 ## Working with the Code
 
