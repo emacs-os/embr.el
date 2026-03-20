@@ -18,6 +18,9 @@ Introduces Camoufox profile tuning (strict vs balanced) focused on recovering sp
 PLAN-6 (PLAN-6.md)
 Implements the full aggressive profile in one bundled pass, then validates once against strict and balanced. It is an aggressive stealth/compatibility tradeoff profile designed to maximize performance via runtime tuning, with explicit rollback if site-friction outcomes are unacceptable.
 
+PLAN-6.5 (PLAN-6.5.md)
+Focuses only on the breakthrough path: move frame pixels off per-frame screenshot polling to Camoufox/Juggler screencast push via a guarded Playwright-driver patch, with deterministic fallback to screenshot mode. New non-item-2 work is explicitly out of scope for this plan.
+
 PLAN-7 (PLAN-7.md)
 Adds a canvas-aware dual rendering pipeline with automatic capability detection and safe fallback to legacy JPEG, enabling a faster canvas-stream path when available without requiring patched Emacs for baseline use.
 
