@@ -21,9 +21,7 @@ Emacs is the display server. Headless Firefox via [Camoufox](https://camoufox.co
            :repo "emacs-os/embr.el"
            :files ("*.el" "*.py" "*.sh" "libexec/*.c"))
   :config
-  (setq embr-python "~/.local/share/embr/.venv/bin/python" ;; auto-detected
-        embr-script (expand-file-name "embr.py" embr--directory) ;; auto-detected
-        embr-fps 60
+  (setq embr-fps 60
         embr-jpeg-quality 80
         embr-hover-rate 20
         embr-default-width 1280
@@ -45,7 +43,6 @@ Emacs is the display server. Headless Firefox via [Camoufox](https://camoufox.co
         embr-hover-rate-min 14
         embr-external-command "yt-dlp -o - %s | mpv -"
         embr-booster nil
-        embr-booster-path (expand-file-name "embr-booster" embr--data-dir)
         embr-booster-args nil))
 ```
 
@@ -58,9 +55,7 @@ Emacs is the display server. Headless Firefox via [Camoufox](https://camoufox.co
              :repo "emacs-os/embr.el"
              :files ("*.el" "*.py" "*.sh" "libexec/*.c"))
   :config
-  (setq embr-python "~/.local/share/embr/.venv/bin/python" ;; auto-detected
-        embr-script (expand-file-name "embr.py" embr--directory) ;; auto-detected
-        embr-fps 60
+  (setq embr-fps 60
         embr-jpeg-quality 80
         embr-hover-rate 20
         embr-default-width 1280
@@ -82,7 +77,6 @@ Emacs is the display server. Headless Firefox via [Camoufox](https://camoufox.co
         embr-hover-rate-min 14
         embr-external-command "yt-dlp -o - %s | mpv -"
         embr-booster nil
-        embr-booster-path (expand-file-name "embr-booster" embr--data-dir)
         embr-booster-args nil))
 ```
 
@@ -127,8 +121,8 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `embr-python` | file | auto-detected | Path to Python interpreter in the embr venv. Default: `~/.local/share/embr/.venv/bin/python`. |
-| `embr-script` | file | auto-detected | Path to the embr.py daemon script. Default: auto-detected from package install directory. |
+| `embr-python` | file | `~/.local/share/embr/.venv/bin/python` | Path to Python interpreter in the embr venv. |
+| `embr-script` | file | `embr.py` in package dir | Path to the embr.py daemon script. |
 | `embr-fps` | integer | `60` | Target frames per second |
 | `embr-jpeg-quality` | integer | `80` | JPEG quality (1-100). Lower = smaller frames, less CDP contention, worse image. 50 halves frame size. |
 | `embr-hover-rate` | integer | `20` | Mouse hover tracking rate in Hz. Lower = better click reliability during video, less responsive hover. |
@@ -151,7 +145,7 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 | `embr-hover-rate-min` | integer | `14` | Minimum hover rate (Hz) under load pressure. Hover self-throttles from `embr-hover-rate` to this. |
 | `embr-external-command` | string | yt-dlp + mpv | Shell command for `&` key (`%s` = URL). Default pipes through yt-dlp into mpv. |
 | `embr-booster` | boolean | `nil` | When non-nil, launch embr-booster C proxy between Emacs and embr.py for priority scheduling. |
-| `embr-booster-path` | file | auto-detected | Path to the compiled embr-booster binary. Default: `~/.local/share/embr/embr-booster`. |
+| `embr-booster-path` | file | `~/.local/share/embr/embr-booster` | Path to the compiled embr-booster binary. |
 | `embr-booster-args` | list | `nil` | Additional CLI arguments for embr-booster (e.g. `("--log-level" "debug")`). |
 
 ### New in this version
