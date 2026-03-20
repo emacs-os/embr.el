@@ -38,6 +38,10 @@ Emacs (embr.el) ←→ JSON over stdin/stdout ←→ Python daemon (embr.py)
 - Emacs 30.1+ required (native JSON parser). Python 3.10+ required.
 - Browser profile persists at `~/.local/share/embr/firefox-profile/`.
 
+## Git Policy
+
+Never stage, commit, or push unless explicitly told to do so. Any such instruction is a one-time approval for that specific action only — never treat it as recurring authorization for future operations.
+
 ## Validation
 
 After modifying code, always run `make test` before finishing. This runs `make checkparens` (balanced parens in embr.el) and `make checkpy` (Python syntax check on embr.py). Do not consider the task complete if any check fails.
