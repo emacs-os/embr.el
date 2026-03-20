@@ -319,7 +319,7 @@ Unknown. Let us know.
 
 ## TODOs - PERFORMANCE
 
-PLAN-1 (PLAN.md) -- DONE 0.13
+PLAN-1 (PLAN.md) -- DONE 0.20
 Builds the baseline responsiveness system: input-first scheduling, adaptive capture behavior, hover shedding, and measurable perf reporting. It improves interaction latency consistency and reduces freeze events while establishing objective pass/fail gates.
 
 PLAN-2 (PLAN-2.md)
