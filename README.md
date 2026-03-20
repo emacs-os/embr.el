@@ -33,6 +33,7 @@ Emacs is the display server. Headless Firefox via [Camoufox](https://camoufox.co
         embr-click-method 'atomic
         embr-scroll-method 'instant
         embr-scroll-step 100
+        embr-dom-caret-hack t
         embr-external-command "yt-dlp -o - %s | mpv -"))
 ```
 
@@ -57,6 +58,7 @@ Emacs is the display server. Headless Firefox via [Camoufox](https://camoufox.co
         embr-click-method 'atomic
         embr-scroll-method 'instant
         embr-scroll-step 100
+        embr-dom-caret-hack t
         embr-external-command "yt-dlp -o - %s | mpv -"))
 ```
 
@@ -111,6 +113,7 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 | `embr-click-method` | symbol | `'atomic` | `'atomic` defers mousedown until drag detected, better iframe compat. `'immediate` sends mousedown instantly, for press-and-hold sites. |
 | `embr-scroll-method` | symbol | `'instant` | `'smooth` scrolls with CSS animation. `'instant` scrolls instantly, line-by-line feel. |
 | `embr-scroll-step` | integer | `100` | Scroll distance in pixels per wheel notch |
+| `embr-dom-caret-hack` | boolean | `t` | Inject a fake DOM caret in focused text fields. CDP screenshots don't capture the native caret. |
 | `embr-external-command` | string | yt-dlp + mpv | Shell command for `&` key (`%s` = URL). Default pipes through yt-dlp into mpv. |
 
 

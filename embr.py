@@ -120,16 +120,17 @@ async def main():
                 os="linux",
                 accept_downloads=False,
             )
+            prefs = {}
             color_scheme = params.get("color_scheme")
             if color_scheme:
                 browser_opts["color_scheme"] = color_scheme
                 # Reinforce via Firefox prefs in case Playwright's context-level
                 # setting is overridden by Camoufox's fingerprint.
-                prefs = {"layout.css.prefers-color-scheme.content-override":
-                         1 if color_scheme == "light" else 0,
-                         "ui.systemUsesDarkTheme":
-                         0 if color_scheme == "light" else 1}
-                browser_opts["firefox_user_prefs"] = prefs
+                prefs["layout.css.prefers-color-scheme.content-override"] = (
+                    1 if color_scheme == "light" else 0)
+                prefs["ui.systemUsesDarkTheme"] = (
+                    0 if color_scheme == "light" else 1)
+            browser_opts["firefox_user_prefs"] = prefs
             context = await AsyncNewBrowser(pw, **browser_opts)
             # Ad blocking via request interception.
             blocked = load_blocklist()
@@ -149,9 +150,92 @@ async def main():
                     else:
                         await route.continue_()
                 await context.route("**/*", block_ads)
+            # Fake caret: CDP screenshots don't capture the native caret.
+            # Inject a DOM element that polls cursor position in focused inputs.
+            dom_caret = params.get("dom_caret", False)
+            _CARET_BODY = """
+if (window.__embr_caret) return;
+window.__embr_caret = true;
+function embrStartCaret() {
+    var el = document.createElement('div');
+    el.id = '__embr_caret';
+    el.style.cssText = 'position:fixed;z-index:2147483647;width:2px;height:16px;background:red;pointer-events:none;display:none;';
+    document.body.appendChild(el);
+    setInterval(function() {
+        try {
+            var ae = document.activeElement;
+            if (!ae || ae === document.body || ae === document.documentElement) {
+                el.style.display = 'none';
+                return;
+            }
+            var tag = ae.tagName;
+            var isInput = (tag === 'INPUT' || tag === 'TEXTAREA') && ae.selectionStart != null;
+            var editable = ae.isContentEditable;
+            if (!isInput && !editable) {
+                el.style.display = 'none';
+                return;
+            }
+            if (editable) {
+                var sel = window.getSelection();
+                if (sel && sel.rangeCount && sel.isCollapsed) {
+                    var r = sel.getRangeAt(0).cloneRange();
+                    r.collapse(false);
+                    var rect = r.getBoundingClientRect();
+                    if (rect && rect.height > 0) {
+                        el.style.left = rect.left + 'px';
+                        el.style.top = rect.top + 'px';
+                        el.style.height = rect.height + 'px';
+                        el.style.background = getComputedStyle(ae).color || 'red';
+                        el.style.display = 'block';
+                        return;
+                    }
+                }
+                el.style.display = 'none';
+                return;
+            }
+            var pos = ae.selectionStart;
+            var cs = getComputedStyle(ae);
+            var br = ae.getBoundingClientRect();
+            var m = document.createElement('div');
+            var props = ['font','letterSpacing','textTransform','paddingLeft','paddingRight','paddingTop','paddingBottom','borderLeftWidth','borderRightWidth','borderTopWidth','borderBottomWidth','boxSizing'];
+            m.style.cssText = 'position:absolute;top:-9999px;left:-9999px;visibility:hidden;white-space:pre;overflow:hidden;';
+            for (var i = 0; i < props.length; i++) m.style[props[i]] = cs[props[i]];
+            m.style.width = br.width + 'px';
+            if (tag === 'TEXTAREA') m.style.whiteSpace = 'pre-wrap';
+            var textBefore = ae.value.substring(0, pos);
+            m.textContent = textBefore;
+            var sp = document.createElement('span');
+            sp.textContent = '|';
+            m.appendChild(sp);
+            document.body.appendChild(m);
+            var spRect = sp.getBoundingClientRect();
+            var mRect = m.getBoundingClientRect();
+            m.remove();
+            var lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2;
+            var x = br.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft) + (spRect.left - mRect.left) - ae.scrollLeft;
+            var y = br.top + (spRect.top - mRect.top) - ae.scrollTop;
+            el.style.left = x + 'px';
+            el.style.top = y + 'px';
+            el.style.height = lh + 'px';
+            el.style.background = cs.color || 'red';
+            el.style.display = 'block';
+        } catch(e) { console.error('embr caret:', e); }
+    }, 50);
+}
+if (document.body) embrStartCaret();
+else document.addEventListener('DOMContentLoaded', embrStartCaret);
+"""
+            if dom_caret:
+                await context.add_init_script(_CARET_BODY)
+
             target_fps = params.get("fps", 60)
             jpeg_quality = params.get("jpeg_quality", 80)
             page = context.pages[0] if context.pages else await context.new_page()
+            if dom_caret:
+                try:
+                    await page.evaluate("() => {" + _CARET_BODY + "}")
+                except Exception:
+                    pass
             # Force our exact viewport size (camoufox may derive a different one from its fingerprint).
             await page.set_viewport_size({"width": width, "height": height})
             loop_task = asyncio.create_task(screenshot_loop())

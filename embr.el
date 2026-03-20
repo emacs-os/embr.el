@@ -122,6 +122,13 @@ Camoufox choose from its fingerprint profile."
                  (const :tag "Light" light)
                  (const :tag "Auto (Camoufox default)" nil)))
 
+(defcustom embr-dom-caret-hack t
+  "Whether to inject a fake DOM caret in focused text fields.
+CDP screenshots do not capture the native browser caret, so embr
+injects a thin DOM element that tracks the cursor position.  Set
+to nil to disable."
+  :type 'boolean)
+
 (defcustom embr-search-engine 'google
   "Search engine for URL bar queries.
 Can be a symbol (`brave', `google', `duckduckgo') or a custom URL
@@ -990,7 +997,9 @@ If the daemon is already running, just navigate to the new URL."
                    (fps . ,embr-fps)
                    (jpeg_quality . ,embr-jpeg-quality)
                    ,@(when embr-color-scheme
-                       `((color_scheme . ,(symbol-name embr-color-scheme))))))))
+                       `((color_scheme . ,(symbol-name embr-color-scheme))))
+                   ,@(when embr-dom-caret-hack
+                       '((dom_caret . t)))))))
 
       (if (alist-get 'error resp)
           (error "embr: init failed: %s" (alist-get 'error resp))
