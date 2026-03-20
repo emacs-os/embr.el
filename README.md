@@ -47,11 +47,9 @@ Emacs is the display server. Headless Firefox via [Camoufox](https://camoufox.co
            :repo "emacs-os/embr.el"
            :files ("*.el" "*.py" "*.sh"))
   :config
-  ;; embr-python and embr-script are auto-detected; override only for
-  ;; custom venv or script locations.
-  ;; (setq embr-python "~/.local/share/embr/.venv/bin/python")
-  ;; (setq embr-script "/path/to/embr.py")
-  (setq embr-fps 30
+  (setq embr-python "~/.local/share/embr/.venv/bin/python" ;; auto-detected
+        embr-script (expand-file-name "embr.py" embr--directory) ;; auto-detected
+        embr-fps 30
         embr-jpeg-quality 80
         embr-hover-rate 8
         embr-default-width 1280
@@ -83,11 +81,9 @@ Emacs is the display server. Headless Firefox via [Camoufox](https://camoufox.co
              :repo "emacs-os/embr.el"
              :files ("*.el" "*.py" "*.sh"))
   :config
-  ;; embr-python and embr-script are auto-detected; override only for
-  ;; custom venv or script locations.
-  ;; (setq embr-python "~/.local/share/embr/.venv/bin/python")
-  ;; (setq embr-script "/path/to/embr.py")
-  (setq embr-fps 30
+  (setq embr-python "~/.local/share/embr/.venv/bin/python" ;; auto-detected
+        embr-script (expand-file-name "embr.py" embr--directory) ;; auto-detected
+        embr-fps 30
         embr-jpeg-quality 80
         embr-hover-rate 8
         embr-default-width 1280
