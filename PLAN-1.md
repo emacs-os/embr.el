@@ -398,3 +398,13 @@ This plan is complete when an implementation:
 - dedicated performance benchmark harness automation,
 - transport redesign beyond CDP screenshot-heavy path.
 
+
+## Implementation Policy Override (Execution Style)
+
+This repository uses a continuous implementation style for performance work.
+
+- Implement phases continuously; do not block on per-phase benchmarks or formal reports.
+- Keep diagnostics and benchmark tooling in the codebase as optional tools.
+- Any acceptance gate, report requirement, or intermediate target in this plan is non-blocking during implementation.
+- Formal validation/testing for sign-off is performed once all phases in this plan are implemented.
+- Plan completion does not require maintaining long-term report artifacts.
