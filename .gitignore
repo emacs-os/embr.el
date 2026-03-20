@@ -2,5 +2,4 @@
 __pycache__/
 *.pyc
 *.elc
-PLAN.md
 blocklist.txt
