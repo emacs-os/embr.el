@@ -2,7 +2,7 @@
 
 ;; Author: embr contributors
 ;; Version: 0.2.0
-;; Package-Requires: ((emacs "29.1"))
+;; Package-Requires: ((emacs "30.1"))
 ;; Keywords: web, browser
 ;; URL: https://github.com/emacs-os/embr.el
 
@@ -15,7 +15,6 @@
 
 ;;; Code:
 
-(require 'json)
 (require 'image)
 
 ;; ── Customization ──────────────────────────────────────────────────
@@ -277,18 +276,18 @@ This does NOT remove the Emacs package itself — use your package manager for t
         (setq embr--response-buffer (substring embr--response-buffer pos))
         (when (and line (not (string-empty-p line)))
           (condition-case err
-              (let ((json-object-type 'alist)
-                    (json-array-type 'list)
-                    (json-key-type 'symbol))
-                (let ((resp (json-read-from-string line)))
-                  (if (alist-get 'frame resp)
-                      ;; Frame notification — just remember the latest one.
-                      (setq last-frame resp)
-                    ;; Command response — dispatch to callback.
-                    (when embr--callback
-                      (let ((cb embr--callback))
-                        (setq embr--callback nil)
-                        (funcall cb resp))))))
+              (let ((resp (json-parse-string line :object-type 'alist
+                                                  :array-type 'list
+                                                  :null-object nil
+                                                  :false-object :false)))
+                (if (alist-get 'frame resp)
+                    ;; Frame notification — just remember the latest one.
+                    (setq last-frame resp)
+                  ;; Command response — dispatch to callback.
+                  (when embr--callback
+                    (let ((cb embr--callback))
+                      (setq embr--callback nil)
+                      (funcall cb resp)))))
             (error (message "embr: JSON parse error: %s"
                             (error-message-string err)))))))
     ;; Stash the latest frame for the render timer instead of
@@ -310,8 +309,7 @@ This does NOT remove the Emacs package itself — use your package manager for t
   (unless (and embr--process (process-live-p embr--process))
     (error "embr: daemon not running"))
   (setq embr--callback callback)
-  (let ((json-str (json-encode msg)))
-    (process-send-string embr--process (concat json-str "\n"))))
+  (process-send-string embr--process (concat (json-serialize msg) "\n")))
 
 (defun embr--send-sync (msg)
   "Send MSG and wait synchronously for the response.  Returns the parsed alist."
@@ -560,7 +558,7 @@ Better compatibility with iframe widgets like Cloudflare Turnstile."
             ;; Using embr--send here would clobber any pending command callback.
             (process-send-string
              embr--process
-             (concat (json-encode `((cmd . "mousemove") (x . ,img-x) (y . ,img-y))) "\n"))))))))
+             (concat (json-serialize `((cmd . "mousemove") (x . ,img-x) (y . ,img-y))) "\n"))))))))
 
 
 (defun embr--hover-start ()
@@ -699,7 +697,7 @@ Better compatibility with iframe widgets like Cloudflare Turnstile."
      (lambda (resp)
        (if-let* ((err (alist-get 'error resp)))
            (message "embr find error: %s" err)
-         (if (eq (alist-get 'result resp) :json-false)
+         (if (eq (alist-get 'result resp) :false)
              (message "embr: no more matches")
            (message "Search: %s" embr--search-query)))))))
 
@@ -838,7 +836,7 @@ Better compatibility with iframe widgets like Cloudflare Turnstile."
         (embr--send
          `((cmd . "js")
            (expr . ,(format "document.execCommand('insertText', false, %s)"
-                            (json-encode text))))
+                            (json-serialize text))))
          #'embr--action-callback)
       (message "embr: kill ring empty"))))
 

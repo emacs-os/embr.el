@@ -35,8 +35,12 @@ Emacs (embr.el) ←→ JSON over stdin/stdout ←→ Python daemon (embr.py)
 - No formal test suite exists. Testing is manual via interactive Emacs commands.
 - No linter/formatter configuration. Emacs Lisp follows GNU conventions; Python is PEP-ish.
 - `blocklist.txt` is in `.gitignore` — it's downloaded by `setup.sh`, not checked in.
-- Emacs 29.1+ required (image support). Python 3.10+ required.
+- Emacs 30.1+ required (native JSON parser). Python 3.10+ required.
 - Browser profile persists at `~/.local/share/embr/firefox-profile/`.
+
+## Validation
+
+After modifying code, always run `make test` before finishing. This runs `make checkparens` (balanced parens in embr.el) and `make checkpy` (Python syntax check on embr.py). Do not consider the task complete if any check fails.
 
 ## Working with the Code
 

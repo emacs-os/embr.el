@@ -8,7 +8,7 @@ Emacs is the display server. Headless Firefox via [Camoufox](https://camoufox.co
 ## Prerequisites
 
 - Python 3.10+
-- Emacs 29.1+ (with image support)
+- Emacs 30.1+ (with image support)
 
 ## Installation
 
