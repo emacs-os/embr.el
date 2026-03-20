@@ -1,29 +1,3 @@
-## TODOs - PERFORMANCE
-
-PLAN-1 (PLAN.md)
-Builds the baseline responsiveness system: input-first scheduling, adaptive capture behavior, hover shedding, and measurable perf reporting. It improves interaction latency consistency and reduces freeze events while establishing objective pass/fail gates.
-
-PLAN-2 (PLAN-2.md)
-Adds a C-based embr-booster transport layer to prioritize control/input traffic over frame churn with bounded queues and backpressure policy. It improves responsiveness under load by reducing pipe contention and head-of-line blocking.
-
-PLAN-3 (PLAN-3.md)
-Moves beyond transport tuning into payload/render architecture: partial updates, binary channel, shared-memory path, and Emacs render optimization. It improves FPS and freshness by reducing full-frame bandwidth and stale-frame decode work.
-
-PLAN-4 (PLAN-4.md)
-Pushes the no-Emacs-patch performance ceiling with copy elimination, jitter control, optional module acceleration, and strict replay benchmarking. It targets tighter p95/p99 latency and higher sustained FPS without requiring an Emacs fork.
-
-PLAN-5 (PLAN-5.md)
-Introduces Camoufox profile tuning (strict vs balanced) focused on recovering speed while keeping uBO on, images on, and non-virtual headless mode. It improves startup/navigation/revisit performance through runtime pref tuning and optional geoip install cleanup.
-
-PLAN-6 (PLAN-6.md)
-Implements the full aggressive profile in one bundled pass, then validates once against strict and balanced. It is an aggressive stealth/compatibility tradeoff profile designed to maximize performance via runtime tuning, with explicit rollback if site-friction outcomes are unacceptable.
-
-PLAN-6.5 (PLAN-6.5.md)
-Focuses only on the breakthrough path: move frame pixels off per-frame screenshot polling to Camoufox/Juggler screencast push via a guarded Playwright-driver patch, with deterministic fallback to screenshot mode. New non-item-2 work is explicitly out of scope for this plan.
-
-PLAN-7 (PLAN-7.md)
-Adds a canvas-aware dual rendering pipeline with automatic capability detection and safe fallback to legacy JPEG, enabling a faster canvas-stream path when available without requiring patched Emacs for baseline use.
-
 ## embr.el
 **Em**acs **Br**owser
 
@@ -45,7 +19,7 @@ Emacs is the display server. Headless Firefox via [Camoufox](https://camoufox.co
   :defer t
   :ensure (:host github
            :repo "emacs-os/embr.el"
-           :files ("*.el" "*.py" "*.sh"))
+           :files ("*.el" "*.py" "*.sh" "libexec/"))
   :config
   (setq embr-python "~/.local/share/embr/.venv/bin/python" ;; auto-detected
         embr-script (expand-file-name "embr.py" embr--directory) ;; auto-detected
@@ -69,7 +43,10 @@ Emacs is the display server. Headless Firefox via [Camoufox](https://camoufox.co
         embr-adaptive-jpeg-quality-min 65
         embr-hover-move-threshold-px 0
         embr-hover-rate-min 14
-        embr-external-command "yt-dlp -o - %s | mpv -"))
+        embr-external-command "yt-dlp -o - %s | mpv -"
+        embr-booster nil
+        embr-booster-path (expand-file-name "embr-booster" embr--data-dir)
+        embr-booster-args nil))
 ```
 
 **straight.el**
@@ -79,7 +56,7 @@ Emacs is the display server. Headless Firefox via [Camoufox](https://camoufox.co
   :defer t
   :straight (:host github
              :repo "emacs-os/embr.el"
-             :files ("*.el" "*.py" "*.sh"))
+             :files ("*.el" "*.py" "*.sh" "libexec/"))
   :config
   (setq embr-python "~/.local/share/embr/.venv/bin/python" ;; auto-detected
         embr-script (expand-file-name "embr.py" embr--directory) ;; auto-detected
@@ -103,7 +80,10 @@ Emacs is the display server. Headless Firefox via [Camoufox](https://camoufox.co
         embr-adaptive-jpeg-quality-min 65
         embr-hover-move-threshold-px 0
         embr-hover-rate-min 14
-        embr-external-command "yt-dlp -o - %s | mpv -"))
+        embr-external-command "yt-dlp -o - %s | mpv -"
+        embr-booster nil
+        embr-booster-path (expand-file-name "embr-booster" embr--data-dir)
+        embr-booster-args nil))
 ```
 
 **Tip:** Make embr your default Emacs browser and enable clickable URLs everywhere:
@@ -125,8 +105,9 @@ All management is done from Emacs, no terminal needed.
 
 | Command | Description |
 |---------|-------------|
-| `M-x embr-setup-or-update` | Install or update venv + Camoufox + ad blocklist (runs `setup.sh`) |
-| `M-x embr-uninstall` | Remove venv, browsers, and browser profile (runs `uninstall.sh`) |
+| `M-x embr-setup-or-update` | Install or update venv + Camoufox + ad blocklist + compile booster (runs `setup.sh`) |
+| `M-x embr-build-booster` | Compile the embr-booster C proxy (requires a C compiler) |
+| `M-x embr-uninstall` | Remove venv, browsers, browser profile, and booster binary (runs `uninstall.sh`) |
 | `M-x embr-info` | Show diagnostic info about the installation |
 
 The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's always safe to re-run for both first install and updates.
@@ -136,6 +117,7 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 | What | Path |
 |------|------|
 | Python venv | `~/.local/share/embr/.venv/` |
+| Booster binary | `~/.local/share/embr/embr-booster` |
 | Camoufox browser | `~/.cache/camoufox/` |
 | Cookies & sessions | `~/.local/share/embr/firefox-profile/` |
 
@@ -168,6 +150,9 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 | `embr-hover-move-threshold-px` | integer | `0` | Minimum pixel distance before sending a hover update. Filters sub-pixel jitter. |
 | `embr-hover-rate-min` | integer | `14` | Minimum hover rate (Hz) under load pressure. Hover self-throttles from `embr-hover-rate` to this. |
 | `embr-external-command` | string | yt-dlp + mpv | Shell command for `&` key (`%s` = URL). Default pipes through yt-dlp into mpv. |
+| `embr-booster` | boolean | `nil` | When non-nil, launch embr-booster C proxy between Emacs and embr.py for priority scheduling. |
+| `embr-booster-path` | file | auto-detected | Path to the compiled embr-booster binary. Default: `~/.local/share/embr/embr-booster`. |
+| `embr-booster-args` | list | `nil` | Additional CLI arguments for embr-booster (e.g. `("--log-level" "debug")`). |
 
 ### New in this version
 
@@ -179,6 +164,8 @@ The following variables were added for the responsiveness system. They work with
 - `embr-hover-move-threshold-px` — filters sub-pixel hover jitter (default 0px)
 - `embr-hover-rate-min` — hover self-throttle floor under pressure (default 14 Hz)
 - `embr-perf-log` — enables JSONL performance logging for diagnostics (default off)
+- `embr-booster` — enables the optional C transport proxy for lower latency under load (default off)
+- `embr-booster-path`, `embr-booster-args` — path and extra CLI args for the booster binary
 
 ## Usage
 
@@ -289,6 +276,27 @@ The mouse deadlock chain was always: sustained hover traffic (20 Hz) + screensho
 
 The full keyboard flow: `C-n`/`C-p` to scroll, `C-c h` for Vimium-style link hints, `Tab` to cycle form fields, `C-s` to find text, `C-c l` to navigate. See [Keybindings](#keybindings) for the complete list.
 
+### embr-booster (optional C transport)
+
+For lower latency under high load (video + mouse input), embr includes an optional C proxy called embr-booster that sits between Emacs and embr.py:
+
+```
+Emacs ←→ embr-booster (C) ←→ embr.py
+```
+
+The booster provides:
+- **Priority scheduling**: navigation/input commands (P0/P1) drain before mousemove (P2) and frames (P3)
+- **Message coalescing**: consecutive mousemoves and frame notifications collapse to the latest
+- **Input-priority windowing**: frames are suppressed briefly after interactive input to free the pipe
+- **Frame rate limiting**: caps frame forwarding under pressure
+- **Backpressure**: bounded queues prevent unbounded memory growth
+
+To use it:
+1. Compile: `make booster` (requires a C compiler)
+2. Set `embr-booster` to `t` in your config
+
+The booster is protocol-transparent — same JSON lines, just reordered and coalesced. If the binary is missing, embr falls back to direct mode with a warning.
+
 **Known side effect:** During video playback, clicks may not register if the mouse is moving. The hover timer sends CDP `page.mouse.move()` at `embr-hover-rate` Hz, which competes for pipe bandwidth with the click's `page.evaluate()` call. Workaround: hold the mouse still, then click. This tradeoff exists to prevent CDP deadlocks that would otherwise freeze all input indefinitely. Improving this is ongoing.
 
 ## FAQ
@@ -308,3 +316,29 @@ No plans to add this upstream, but PRs are welcome. If you implement it, gate it
 ### Does this work on macOS?
 
 Unknown. Let us know.
+
+## TODOs - PERFORMANCE
+
+PLAN-1 (PLAN.md) -- DONE 0.13
+Builds the baseline responsiveness system: input-first scheduling, adaptive capture behavior, hover shedding, and measurable perf reporting. It improves interaction latency consistency and reduces freeze events while establishing objective pass/fail gates.
+
+PLAN-2 (PLAN-2.md)
+Adds a C-based embr-booster transport layer to prioritize control/input traffic over frame churn with bounded queues and backpressure policy. It improves responsiveness under load by reducing pipe contention and head-of-line blocking.
+
+PLAN-3 (PLAN-3.md)
+Moves beyond transport tuning into payload/render architecture: partial updates, binary channel, shared-memory path, and Emacs render optimization. It improves FPS and freshness by reducing full-frame bandwidth and stale-frame decode work.
+
+PLAN-4 (PLAN-4.md)
+Pushes the no-Emacs-patch performance ceiling with copy elimination, jitter control, optional module acceleration, and strict replay benchmarking. It targets tighter p95/p99 latency and higher sustained FPS without requiring an Emacs fork.
+
+PLAN-5 (PLAN-5.md)
+Introduces Camoufox profile tuning (strict vs balanced) focused on recovering speed while keeping uBO on, images on, and non-virtual headless mode. It improves startup/navigation/revisit performance through runtime pref tuning and optional geoip install cleanup.
+
+PLAN-6 (PLAN-6.md)
+Implements the full aggressive profile in one bundled pass, then validates once against strict and balanced. It is an aggressive stealth/compatibility tradeoff profile designed to maximize performance via runtime tuning, with explicit rollback if site-friction outcomes are unacceptable.
+
+PLAN-6.5 (PLAN-6.5.md)
+Focuses only on the breakthrough path: move frame pixels off per-frame screenshot polling to Camoufox/Juggler screencast push via a guarded Playwright-driver patch, with deterministic fallback to screenshot mode. New non-item-2 work is explicitly out of scope for this plan.
+
+PLAN-7 (PLAN-7.md)
+Adds a canvas-aware dual rendering pipeline with automatic capability detection and safe fallback to legacy JPEG, enabling a faster canvas-stream path when available without requiring patched Emacs for baseline use.
