@@ -941,7 +941,6 @@ Better compatibility with iframe widgets like Cloudflare Turnstile."
     (define-key map (kbd "C-c h") #'embr-follow-hint)
     (define-key map (kbd "C-c t") #'embr-view-text)
     (define-key map (kbd "C-c w") #'embr-copy-url)
-    (define-key map (kbd "C-c s") #'embr-isearch-forward)
     (define-key map (kbd "C-c n") #'embr-new-tab)
     (define-key map (kbd "C-c d") #'embr-close-tab)
     (define-key map (kbd "C-c ]") #'embr-next-tab)

@@ -164,7 +164,6 @@ Browser commands use the `C-c` prefix — eww-inspired commands, just behind a p
 | `C-c r` | Refresh |
 | `C-c b` / `C-c C-b` | Back |
 | `C-c f` / `C-c C-f` | Forward |
-| `C-c s` | Search forward (same as `C-s`) |
 | `C-c t` | View page text in a separate buffer |
 | `C-c w` | Copy current URL to kill ring |
 | `C-c :` | Execute JavaScript |
