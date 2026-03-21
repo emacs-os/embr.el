@@ -1,6 +1,6 @@
 I need you to stop guessing, stop treating me like I'm dumb, ask me more questions about how I want to solve this, etc.
 
-NEVER USE em dashes, semicolons, or emojis in the README file.
+NEVER USE em dashes, semicolons, or emojis in the README file. The audience is smart. Be brief, keep it simple. No jargon dumps or over-explaining.
 
 # CLAUDE.md
 
