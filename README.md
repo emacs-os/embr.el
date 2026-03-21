@@ -187,11 +187,13 @@ Standard Emacs bookmarks work: `C-x r m` to save, `C-x r b` to jump.
 
 ## Ad Blocking
 
-A **domain-level blocklist** using the [StevenBlack/hosts](https://github.com/StevenBlack/hosts) list (~82K ad and tracker domains) is included out of the box. Requests to blocked domains are intercepted and killed before they hit the network. The blocklist is downloaded by `setup.sh` and refreshed alongside the CloakBrowser binary every time you run `M-x embr-setup-or-update-all`. Run it periodically to keep both up to date.
+Two layers of ad blocking are available. Running `M-x embr-setup-or-update-all` periodically keeps everything up to date. You can also update each layer individually with `M-x embr-update-blocklist` or `M-x embr-update-ublock`.
+
+**Domain-level blocklist** (built in). The [StevenBlack/hosts](https://github.com/StevenBlack/hosts) list (~82K ad and tracker domains) intercepts and kills requests to blocked domains before they hit the network.
 
 ### uBlock Origin (optional)
 
-For full cosmetic filtering, element hiding, and script-level ad blocking (e.g. YouTube ads), you can install [uBlock Origin](https://github.com/gorhill/uBlock) as a Chromium extension. Headless Chromium does not support extensions, so this requires a one-time setup in headed mode. `M-x embr-setup-or-update-all` downloads the latest uBlock Origin release for you. You just need to enable it once.
+For ad blocking beyond domain-level, you can install [uBlock Origin](https://github.com/gorhill/uBlock) as a Chromium extension. `M-x embr-setup-or-update-all` downloads the latest release for you. You just need to enable it once in headed mode (headless Chromium does not support extensions).
 
 1. **Install Xvfb** (if you don't have it, needed for `headed-offscreen` mode):
 
