@@ -23,7 +23,7 @@ Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakb
            :repo "emacs-os/embr.el"
            :files ("*.el" "*.py" "*.sh" "native/*.c" "native/Makefile"))
   :config
-  (setq embr-hover-rate 60
+  (setq embr-hover-rate 30
         embr-default-width 1280
         embr-default-height 720
         embr-screen-width 1920
@@ -32,7 +32,7 @@ Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakb
         embr-search-engine 'google
         embr-scroll-method 'instant
         embr-scroll-step 100
-        embr-frame-source 'auto
+        embr-frame-source 'screencast
         embr-render-backend 'auto
         embr-display-method 'headless))
 ```
@@ -46,7 +46,7 @@ Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakb
              :repo "emacs-os/embr.el"
              :files ("*.el" "*.py" "*.sh" "native/*.c" "native/Makefile"))
   :config
-  (setq embr-hover-rate 60
+  (setq embr-hover-rate 30
         embr-default-width 1280
         embr-default-height 720
         embr-screen-width 1920
@@ -55,7 +55,7 @@ Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakb
         embr-search-engine 'google
         embr-scroll-method 'instant
         embr-scroll-step 100
-        embr-frame-source 'auto
+        embr-frame-source 'screencast
         embr-render-backend 'auto
         embr-display-method 'headless))
 ```
@@ -103,7 +103,7 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 |----------|------|---------|-------------|
 | `embr-python` | file | `~/.local/share/embr/.venv/bin/python` | Path to Python interpreter in the embr venv. |
 | `embr-script` | file | `embr.py` in package dir | Path to the embr.py daemon script. |
-| `embr-hover-rate` | integer | `60` | Mouse hover tracking rate in Hz. |
+| `embr-hover-rate` | integer | `30` | Mouse hover tracking rate in Hz. |
 | `embr-default-width` | integer | `1280` | Viewport width in pixels |
 | `embr-default-height` | integer | `720` | Viewport height in pixels |
 | `embr-screen-width` | integer | `1920` | Screen width reported to websites (should be >= viewport) |
@@ -117,7 +117,7 @@ The underlying `setup.sh` builds in a temp venv and swaps atomically, so it's al
 | `embr-perf-log` | boolean | `nil` | Write JSONL perf events to `/tmp/embr-perf.jsonl`. Analyze with `tools/embr-perf-report.py`. |
 | `embr-hover-move-threshold-px` | integer | `0` | Minimum pixel distance before sending a hover update. Filters sub-pixel jitter. |
 | `embr-external-command` | string | yt-dlp + mpv | Shell command for `&` key (`%s` = URL). Default pipes through yt-dlp into mpv. |
-| `embr-frame-source` | symbol | `'auto` | `'auto` tries CDP screencast first, falls back to screenshot polling. `'screencast` requires screencast, errors if unavailable. `'screenshot` uses polling only. |
+| `embr-frame-source` | symbol | `'screencast` | `'screencast` uses CDP screencast (recommended). `'auto` tries screencast first, falls back to polling. `'screenshot` uses polling only. |
 | `embr-render-backend` | symbol | `'auto` | `'auto` uses canvas if available, falls back to legacy. `'legacy` uses JPEG file + create-image. `'canvas` requires canvas-patched Emacs + native module. |
 | `embr-display-method` | symbol | `'headless` | `'headless` (no window, no audio), `'headed` (visible window, audio), `'headed-offscreen` (hidden window via Xvfb, audio). |
 

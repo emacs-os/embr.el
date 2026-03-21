@@ -92,7 +92,7 @@ realistic browser fingerprint."
   "Deprecated. Screenshot-only. JPEG quality (1-100) for screenshot captures."
   :type 'integer)
 
-(defcustom embr-hover-rate 60
+(defcustom embr-hover-rate 30
   "Mouse hover tracking rate in Hz."
   :type 'integer)
 
@@ -174,13 +174,13 @@ When non-nil, the daemon writes JSONL performance events to
   "Deprecated. Screenshot-only. Minimum JPEG quality for adaptive controller."
   :type 'integer)
 
-(defcustom embr-frame-source 'auto
+(defcustom embr-frame-source 'screencast
   "How frames are captured from the browser.
+`screencast' uses CDP screencast (recommended).
 `auto' tries CDP screencast first, falls back to screenshot polling.
-`screencast' requires CDP screencast, errors if unavailable.
 `screenshot' uses the original screenshot polling loop."
-  :type '(choice (const :tag "Auto (screencast with fallback)" auto)
-                 (const :tag "Screencast (no fallback)" screencast)
+  :type '(choice (const :tag "Screencast (recommended)" screencast)
+                 (const :tag "Auto (screencast with fallback)" auto)
                  (const :tag "Screenshot polling" screenshot)))
 
 (defcustom embr-hover-move-threshold-px 0
@@ -673,6 +673,7 @@ Connect to SOCKET-PATH and create the canvas image in the buffer."
         (make-network-process
          :name "embr-canvas"
          :family 'local
+         :service ""
          :remote socket-path
          :coding '(binary . binary)
          :filter #'embr--canvas-socket-filter

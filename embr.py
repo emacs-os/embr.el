@@ -540,13 +540,11 @@ async def main():
               f"fell back to screenshot polling ({reason})"})
 
     def start_title_refresh():
-        """Start async task to refresh title and detect frame stalls."""
+        """Start async task to refresh title and flush buffered frames."""
         nonlocal title_refresh_task
 
         async def _refresh():
-            nonlocal cached_title, _fallback_pending
-            last_check_count = frame_count
-            stall_checks = 0
+            nonlocal cached_title
             while screencast_active:
                 try:
                     cached_title = await page.title()
@@ -555,28 +553,6 @@ async def main():
                 # Flush any buffered frame that hasn't been emitted.
                 if _pending_frame_data is not None:
                     _flush_pending_frame(time.monotonic())
-                # Stall detection: no new frames for 5s (10 * 0.5s).
-                if frame_count == last_check_count:
-                    stall_checks += 1
-                    if stall_checks >= 10 and not _fallback_pending:
-                        perf.log("stall_start",
-                                 stall_duration_s=stall_checks * 0.5)
-                        _fallback_pending = True
-                        if frame_source == "auto":
-                            asyncio.ensure_future(
-                                fallback_to_screenshot("frame stall (5s)"))
-                            break
-                        elif frame_source == "screencast":
-                            asyncio.ensure_future(
-                                _stop_screencast_with_error(
-                                    "screencast stalled: no frames for 5s"))
-                            break
-                else:
-                    if stall_checks > 0:
-                        perf.log("stall_end",
-                                 stall_duration_s=stall_checks * 0.5)
-                    stall_checks = 0
-                    last_check_count = frame_count
                 await asyncio.sleep(0.5)
 
         title_refresh_task = asyncio.create_task(_refresh())
