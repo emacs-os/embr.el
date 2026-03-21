@@ -3,7 +3,7 @@
 
 > **2026-03-20:** Starting in 0.40, embr has migrated from Camoufox/Firefox to [CloakBrowser](https://cloakbrowser.dev)/Chromium. Thanks to [this helpful suggestion](https://www.reddit.com/r/emacs/comments/1ry1q5q/comment/obkg39k/) for pointing us in the right direction. The new engine brings better performance and native CDP support. See HOW_TO_UPDATE.md.
 
-Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakbrowser.dev) is the renderer. Frame transport uses CDP screencast by default (`embr-frame-source` = `auto`), with automatic fallback to screenshot polling if screencast is unavailable.
+Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakbrowser.dev) is the renderer. Frame transport uses CDP screencast by default, with automatic fallback to screenshot polling. On the Emacs side, if you build Emacs with the [canvas patch](https://github.com/minad/emacs-canvas-patch) (see `./canvasmacs`), embr renders frames directly to a pixel buffer via a native C module, skipping the per-frame disk round-trip.
 
 ![embr screenshot](assets/screenshot.png)
 
