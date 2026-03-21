@@ -7,6 +7,8 @@ Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakb
 
 ![embr screenshot](assets/screenshot.png)
 
+If you built a recent Emacs with the experimental [canvas patches](https://github.com/minad/emacs-canvas-patch), embr will detect it at startup and use a native canvas render path (JPEG decode straight to pixel buffer, no disk round-trip). Runs great without it too. Arch users can check `./canvasmacs` for a ready-made PKGBUILD.
+
 ## Prerequisites
 
 - Python 3.10+
