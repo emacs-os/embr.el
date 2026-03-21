@@ -1,0 +1,49 @@
+embr benchmark: screencast vs screenshot -- 2026-03-20
+
+== Input Responsiveness (screencast wins) ==
+Input-to-frame p95:   31.5ms vs 46.0ms  (-31.5%)  << exceeds 20% target
+Frame interval p95:   48.4ms vs 55.0ms  (-12.1%)
+Effective FPS:        31.7 vs 29.9
+FPS 30+ bucket:       76.3% vs 48.1%
+Cmd latency max:      2.1s vs 4.3s
+
+== Frame Freshness (screenshot wins) ==
+Staleness p95:        23.6ms vs 16.3ms  (+44.2% regression)
+Freezes:              3 vs 2
+
+== Ack Health ==
+Ack errors:           0
+Ack ok:               3349
+
+== Drop Rates ==
+Screencast:           37.9% (throttle drops, daemon skips intermediate frames)
+Screenshot:           10.3% (input-priority drops only)
+
+== What This Means ==
+
+Screenshot bottleneck was the CDP pipe. Every frame required a
+round-trip page.screenshot() RPC that blocked the pipe. Input commands
+(click, key, scroll) had to wait for the screenshot to finish before
+they could get through. That is why input-to-frame was slow (46ms p95)
+and why command ack latency could spike to 4.3s.
+
+Screencast eliminates that bottleneck. The browser pushes frames on
+its own, no RPC needed. Input commands flow freely on the CDP pipe
+with no contention. Input-to-frame drops to 31.5ms p95. Command ack
+max drops by half.
+
+The bottleneck has moved. Now it is on the Emacs render side. The
+browser pushes frames faster than Emacs can consume them (37.9% of
+frames are throttle-dropped by the daemon to avoid flooding the
+pipe). The frames that do reach Emacs are slightly older by the time
+they render (staleness p95 went from 16.3ms to 23.6ms) because the
+daemon buffers the latest frame and only flushes on a timer.
+
+Next optimization target: Emacs-side render latency (PLAN-5 canvas
+acceleration) to close the staleness gap.
+
+== Decision ==
+Screencast is the better transport. The input responsiveness gain is
+large and directly felt by the user. The staleness regression is
+small in absolute terms (7ms at p95) and not perceptible. Recommend
+auto as default.

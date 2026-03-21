@@ -1169,7 +1169,7 @@ If the daemon is already running, just navigate to the new URL."
         (setq embr--frame-path (alist-get 'frame_path resp))
         (embr--hover-start)
         (embr--render-start)
-        (message "embr: frame source: %s"
+        (message "embr: using %s transport"
                  (or (alist-get 'frame_source resp) "unknown")))))
   ;; Show buffer and navigate.
   (switch-to-buffer embr--buffer)
