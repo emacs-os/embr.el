@@ -731,10 +731,23 @@ Dispatch to the active backend for display, then update metadata."
       (setq embr--current-title title
             embr--current-url url))))
 
+(defun embr--update-metadata (resp)
+  "Update URL and title from command RESP if present."
+  (when-let* ((url (alist-get 'url resp)))
+    (setq embr--current-url url))
+  (when-let* ((title (alist-get 'title resp)))
+    (setq embr--current-title title)
+    (when (buffer-live-p embr--buffer)
+      (with-current-buffer embr--buffer
+        (rename-buffer (format "*embr: %s*"
+                               (if (string-empty-p title) embr--current-url title))
+                       t)))))
+
 (defun embr--action-callback (resp)
-  "Generic callback for command responses: report errors."
+  "Generic callback for command responses: report errors, update metadata."
   (when-let* ((err (alist-get 'error resp)))
-    (message "embr error: %s" err)))
+    (message "embr error: %s" err))
+  (embr--update-metadata resp))
 
 ;; ── Commands ───────────────────────────────────────────────────────
 

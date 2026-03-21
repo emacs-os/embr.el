@@ -2,6 +2,10 @@
 
 Emacs 31 (PGTK/Wayland) with the [canvas image patch](https://github.com/minad/emacs-canvas-patch) baked in.
 
+## Using canvas with embr
+
+Set `embr-render-backend` to `'canvas` to enable the native canvas render path. embr decodes JPEG frames directly into the canvas pixel buffer via a native C module, skipping the per-frame disk round-trip. Works without canvas too -- `'default` is the safe fallback for any Emacs build.
+
 This is a minimal fork of the official Arch Linux `emacs-wayland` PKGBUILD.
 
 ## Build and install

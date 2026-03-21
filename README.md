@@ -1,7 +1,7 @@
 ## embr.el
 **Em**acs **Br**owser
 
-Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakbrowser.dev) is the renderer. Frame transport uses CDP screencast or screenshot polling (you choose). Emacs canvas (optional) is also supported for added performance. If you build Emacs with the [canvas patch](https://github.com/minad/emacs-canvas-patch) (see `./canvasmacs`), embr renders frames directly to a pixel buffer via a native C module, skipping the per-frame disk round-trip.
+Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakbrowser.dev) is the renderer. Frame transport uses CDP screencast. Emacs canvas (optional) is also supported for added performance. If you build Emacs with the [canvas patch](https://github.com/minad/emacs-canvas-patch) (see [./canvasmacs](./canvasmacs)), embr renders frames directly to a pixel buffer via a native C module, skipping the per-frame disk round-trip.
 
 ![embr screenshot](assets/screenshot.png)
 
@@ -218,9 +218,6 @@ For full cosmetic filtering, element hiding, and script-level ad blocking (e.g. 
    (setq embr-display-method 'headed-offscreen)
    ```
 
-## Emacs Canvas
-
-If you built a recent Emacs with the experimental [canvas patches](https://github.com/minad/emacs-canvas-patch), set `embr-render-backend` to `'canvas` to use the native canvas render path (JPEG decode straight to pixel buffer, no disk round-trip). Runs great without it too. Arch users can check `./canvasmacs` for a PKGBUILD that builds `emacs-wayland` with the canvas patches applied.
 
 ## FAQ
 

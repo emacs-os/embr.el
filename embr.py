@@ -792,7 +792,7 @@ else document.addEventListener('DOMContentLoaded', embrStartCaret);
                 cached_title = await page.title()
             except Exception:
                 pass
-            return {"ok": True}
+            return {"ok": True, "url": page.url, "title": cached_title}
 
         # Mousemove: fire-and-forget CDP (isTrusted=true for CSS :hover).
         # Cancel-and-replace — each new move cancels the previous.
@@ -884,7 +884,7 @@ else document.addEventListener('DOMContentLoaded', embrStartCaret);
                 cached_title = await page.title()
             except Exception:
                 pass
-            return {"ok": True}
+            return {"ok": True, "url": page.url, "title": cached_title}
 
         if cmd == "forward":
             try:
@@ -895,7 +895,7 @@ else document.addEventListener('DOMContentLoaded', embrStartCaret);
                 cached_title = await page.title()
             except Exception:
                 pass
-            return {"ok": True}
+            return {"ok": True, "url": page.url, "title": cached_title}
 
         if cmd == "refresh":
             try:
@@ -906,7 +906,7 @@ else document.addEventListener('DOMContentLoaded', embrStartCaret);
                 cached_title = await page.title()
             except Exception:
                 pass
-            return {"ok": True}
+            return {"ok": True, "url": page.url, "title": cached_title}
 
         if cmd == "js":
             result = await page.evaluate(params["expr"])
@@ -978,7 +978,12 @@ else document.addEventListener('DOMContentLoaded', embrStartCaret);
             err = await _restart_screencast_after_tab_change()
             if err:
                 return err
-            return {"ok": True, "tab_index": len(context.pages) - 1}
+            try:
+                cached_title = await page.title()
+            except Exception:
+                pass
+            return {"ok": True, "tab_index": len(context.pages) - 1,
+                    "url": page.url, "title": cached_title}
 
         if cmd == "close-tab":
             if len(context.pages) <= 1:
@@ -991,7 +996,12 @@ else document.addEventListener('DOMContentLoaded', embrStartCaret);
             err = await _restart_screencast_after_tab_change()
             if err:
                 return err
-            return {"ok": True, "tab_index": len(context.pages) - 1}
+            try:
+                cached_title = await page.title()
+            except Exception:
+                pass
+            return {"ok": True, "tab_index": len(context.pages) - 1,
+                    "url": page.url, "title": cached_title}
 
         if cmd == "list-tabs":
             tabs = []
@@ -1014,7 +1024,7 @@ else document.addEventListener('DOMContentLoaded', embrStartCaret);
                     cached_title = await page.title()
                 except Exception:
                     pass
-                return {"ok": True}
+                return {"ok": True, "url": page.url, "title": cached_title}
             return {"error": f"tab index out of range: {idx}"}
 
         if cmd == "quit":
