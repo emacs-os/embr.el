@@ -829,10 +829,22 @@ else document.addEventListener('DOMContentLoaded', embrStartCaret);
             return {"ok": True}
 
         # Click: JS evaluate (Runtime domain, no CDP pipe contention).
+        # Awaited (not fire-and-forget) so pushState completes before
+        # the response, keeping the URL in sync for hint clicks.
         if cmd == "click":
-            asyncio.create_task(
-                page.evaluate(_CLICK_JS, [params["x"], params["y"]]))
-            return {"ok": True}
+            try:
+                await page.evaluate(_CLICK_JS, [params["x"], params["y"]])
+            except Exception:
+                pass
+            try:
+                url = await page.evaluate("() => window.location.href")
+            except Exception:
+                url = page.url
+            try:
+                cached_title = await page.title()
+            except Exception:
+                pass
+            return {"ok": True, "url": url, "title": cached_title}
         # Mousedown/mouseup: CDP (isTrusted=true, needed for native text
         # selection).  Fire-and-forget — infrequent (one per drag) so they
         # find gaps in the pipe like keyboard events.
@@ -1026,6 +1038,17 @@ else document.addEventListener('DOMContentLoaded', embrStartCaret);
                     pass
                 return {"ok": True, "url": page.url, "title": cached_title}
             return {"error": f"tab index out of range: {idx}"}
+
+        if cmd == "query-url":
+            try:
+                url = await page.evaluate("() => window.location.href")
+            except Exception:
+                url = page.url
+            try:
+                cached_title = await page.title()
+            except Exception:
+                pass
+            return {"ok": True, "url": url, "title": cached_title}
 
         if cmd == "quit":
             running = False

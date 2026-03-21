@@ -1061,8 +1061,11 @@ Better compatibility with iframe widgets like Cloudflare Turnstile."
 (defun embr-copy-url ()
   "Copy the current page URL to the kill ring."
   (interactive)
-  (kill-new embr--current-url)
-  (message "Copied: %s" embr--current-url))
+  (let* ((resp (embr--send-sync '((cmd . "query-url"))))
+         (url (or (alist-get 'url resp) embr--current-url)))
+    (embr--update-metadata resp)
+    (kill-new url)
+    (message "Copied: %s" url)))
 
 ;; ── Resolution toggle ─────────────────────────────────────────────
 
@@ -1072,7 +1075,9 @@ Better compatibility with iframe widgets like Cloudflare Turnstile."
 (defun embr-play-external ()
   "Run `embr-external-command' with the current page URL."
   (interactive)
-  (let ((url embr--current-url))
+  (let* ((resp (embr--send-sync '((cmd . "query-url"))))
+         (url (or (alist-get 'url resp) embr--current-url)))
+    (embr--update-metadata resp)
     (if (string-empty-p url)
         (message "embr: no URL to play")
       (let ((cmd (format embr-external-command (shell-quote-argument url))))
@@ -1206,9 +1211,11 @@ Better compatibility with iframe widgets like Cloudflare Turnstile."
 
 (defun embr--bookmark-make-record ()
   "Create a bookmark record for the current embr page."
-  `(,(format "embr: %s" embr--current-title)
-    (url . ,embr--current-url)
-    (handler . embr--bookmark-handler)))
+  (let ((resp (embr--send-sync '((cmd . "query-url")))))
+    (embr--update-metadata resp)
+    `(,(format "embr: %s" embr--current-title)
+      (url . ,embr--current-url)
+      (handler . embr--bookmark-handler))))
 
 (defun embr--bookmark-handler (bookmark)
   "Jump to a embr BOOKMARK."
