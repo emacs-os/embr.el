@@ -254,7 +254,7 @@ No plans to add this upstream, but PRs are welcome. If you implement it, gate it
 
 ### How do I search?
 
-Any non-URL input in `C-c o` (Open URL) or `embr-browse` is treated as a search query. The default engine is Google. Set `embr-search-engine` to `'brave`, `'duckduckgo`, `'bing`, `'yandex`, `'baidu`, or a custom URL string with `%s` for the query (e.g. `"https://search.brave.com/search?q=%s"`).
+Any non-URL input in `C-c o` (Open URL) or passed as a string argument to `embr-browse` is treated as a search query. The default engine is Google. Set `embr-search-engine` to `'google`, `'brave`, `'duckduckgo`, `'bing`, `'yandex`, `'baidu`, or a custom URL string with `%s` for the query (e.g. `"https://search.brave.com/search?q=%s"`).
 
 ### How do I use an AI agent instead of a search engine?
 
