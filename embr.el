@@ -248,7 +248,7 @@ Must be set before embr is loaded."
   "Non-nil means start in normal mode when `embr-vimium-mode' is enabled."
   :type 'boolean)
 
-(defcustom embr-tab-bar nil
+(defcustom embr-tab-bar t
   "Non-nil means show a clickable tab bar above the page."
   :type 'boolean)
 
@@ -259,7 +259,7 @@ session.  When a session is restored, the saved tabs are opened
 instead."
   :type 'string)
 
-(defcustom embr-session-restore nil
+(defcustom embr-session-restore t
   "Non-nil means save and restore open tabs across sessions.
 On quit, tab URLs are saved to a file.  On next launch, tabs are
 reopened automatically."
@@ -283,22 +283,22 @@ and this to \"127.0.0.1:4444\"."
                  (string :tag "host:port")))
 
 (defface embr-tab-bar
-  '((t :background "gray20" :foreground "white"))
+  '((t :inherit header-line))
   "Face for the tab bar background."
   :group 'embr)
 
 (defface embr-tab-active
-  '((t :inherit embr-tab-bar :weight bold :background "gray40"))
+  '((t :inherit mode-line :weight bold))
   "Face for the active tab label."
   :group 'embr)
 
 (defface embr-tab-inactive
-  '((t :inherit embr-tab-bar))
+  '((t :inherit mode-line-inactive))
   "Face for inactive tab labels."
   :group 'embr)
 
 (defface embr-tab-close
-  '((t :inherit embr-tab-bar :foreground "gray60"))
+  '((t :inherit mode-line-inactive))
   "Face for the tab close button."
   :group 'embr)
 
@@ -1683,10 +1683,10 @@ Tabs are equal width and fill the window, like i3 tabbed layout."
                                     'embr-tab-index idx
                                     'pointer 'hand)))
         (push (concat tab-str close-str) parts)))
-    (propertize
-     (mapconcat #'identity (nreverse parts)
-                (propertize "|" 'face 'embr-tab-bar))
-     'cursor-intangible t)))
+    (let ((bar (mapconcat #'identity (nreverse parts)
+                          (propertize " " 'face 'embr-tab-bar))))
+      (put-text-property 0 (length bar) 'cursor-intangible t bar)
+      bar)))
 
 (defun embr--tab-bar-click (event)
   "Switch to the tab clicked in the tab bar."
@@ -1727,10 +1727,8 @@ Tabs are equal width and fill the window, like i3 tabbed layout."
       (embr--update-tab-list-from-resp resp))))
 
 (defun embr--refresh-tab-bar ()
-  "Update the tab bar display in the buffer.
-For canvas backend, replace line 1.  For default, next frame handles it."
-  (when (and embr-tab-bar embr--tab-list
-             (string= embr--active-backend "canvas"))
+  "Update the tab bar display in the buffer by replacing line 1."
+  (when (and embr-tab-bar embr--tab-list)
     (let ((inhibit-read-only t))
       (save-excursion
         (goto-char (point-min))
@@ -2497,6 +2495,10 @@ DESCRIPTION is shown in the prompt."
 (define-derived-mode embr-mode nil "embr"
   "Major mode for the embr browser buffer."
   :group 'embr
+  ;; Disable hl-line-mode: its line highlight overrides tab bar faces,
+  ;; making the active tab indistinguishable from inactive tabs.
+  (setq-local global-hl-line-mode nil)
+  (hl-line-mode -1)
   ;; Make per-session state buffer-local so multiple instances
   ;; (e.g. normal + incognito) each have their own daemon.
   (setq-local embr--process nil)
