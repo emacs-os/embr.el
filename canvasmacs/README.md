@@ -44,3 +44,26 @@ Canvas decodes JPEG and writes pixels directly into the canvas buffer via a nati
 | Severe freezes | **0** | 1 |
 
 Canvas wins on input latency (30-35% lower at p50/p95), zero render skips again, lower drop ratio, and no severe freezes. Both use screencast transport.
+
+##### Why only ~30 effective FPS?
+
+The bottleneck is 100% Chromium. The embr pipeline (Python + Emacs) adds 0.01ms per frame. All the time is spent waiting for Chromium to produce the next frame after we ack the previous one.
+
+| Where | Time |
+|-------|------|
+| embr pipeline (emit to ack) | 0.01ms |
+| Chromium (ack to next frame) | 28.9ms |
+
+Frame interval distribution from the canvas benchmark:
+
+| Interval | Count | % |
+|----------|-------|---|
+| <10ms | 0 | 0.0% |
+| 10-17ms (60fps zone) | 83 | 10.0% |
+| 17-25ms | 292 | 35.3% |
+| 25-33ms (30fps zone) | 237 | 28.6% |
+| 33-50ms | 162 | 19.6% |
+| 50-100ms | 34 | 4.1% |
+| 100ms+ | 20 | 2.4% |
+
+CDP screencast is capped around 30-35 FPS by Chromium's compositor. Only 10% of frames land in the 60fps zone. To get 60fps you would need to bypass CDP screencast entirely with a different capture API.
