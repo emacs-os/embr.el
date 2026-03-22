@@ -134,64 +134,15 @@ M-x embr-browse RET example.com RET
 
 ## Keybindings
 
-All keys are forwarded directly to the browser. Typing, arrows, backspace, tab, and enter work as expected. `C-x`, `M-x`, etc. stay free for Emacs.
+All keys are forwarded directly to the browser. Typing, arrows, backspace, tab, and enter work as expected. `C-x`, `M-x`, etc. stay free for Emacs. Top-level keybindings translate familiar Emacs motion keys into browser equivalents (`C-c ?` to view them all).
 
-The top-level keybindings below translate familiar Emacs motion keys into their browser equivalents. If you're familiar with EXWM, same concept as simulation keys.
-
-| Key | Action |
-|-----|--------|
-| `C-l` | Go to URL or search (with history completion) |
-| `C-b` | Left arrow |
-| `C-f` | Right arrow |
-| `C-n` | Down arrow |
-| `C-p` | Up arrow |
-| `C-a` | Home |
-| `C-e` | End |
-| `C-d` | Delete forward |
-| `M-f` | Word forward |
-| `M-b` | Word backward |
-| `M-w` | Copy browser selection to kill ring (system clipboard) |
-| `C-y` | Paste from kill ring into browser |
-| `C-s` | Search forward (isearch-style) |
-| `C-r` | Search backward (isearch-style) |
-| `C-v` | Page down |
-| `M-v` | Page up |
-| `&` | Run `embr-external-command` on current URL |
-| `F5` | Refresh page |
-| `C-x` | Emacs prefix (not forwarded) |
-| `M-x` | Emacs command (not forwarded) |
-| `C-c` | Open dispatch menu (transient, like Magit) |
+![top-level bindkeys](assets/toplevel-bindkeys.png)
 
 ### Browser commands
 
-Pressing `C-c` opens a transient dispatch menu (like Magit) that shows all available commands grouped by category. Press `C-c ?` to see top-level bindings. The prefix key is configurable via `embr-dispatch-key`, but the underlying keys follow eww conventions where possible and should be kept as-is. By learning embr keys, you learn eww keys too, so if eww is ever updated to handle the modern web, switching has no learning curve.
+Pressing `C-c` opens a transient dispatch menu (like Magit). The prefix key is configurable via `embr-dispatch-key`, but the underlying keys follow eww conventions where possible and should be kept as-is. By learning embr keys, you learn eww keys too, so if eww is ever updated to handle the modern web, switching has no learning curve.
 
-| Key | Action |
-|-----|--------|
-| `C-c g` | Reload |
-| `C-c l` | Back |
-| `C-c r` | Forward |
-| `C-c p` | Browse tab history |
-| `C-c o` | Open URL or search (same as `C-l`) |
-| `C-c h` | Follow link (Vimium-style hint labels) |
-| `C-c v` | View page text |
-| `C-c e` | View page source |
-| `C-c w` | Copy current URL to kill ring |
-| `C-c d` | Download link |
-| `C-c :` | Execute JavaScript |
-| `C-c c` | New tab |
-| `C-c x` | Close tab |
-| `C-c ]` / `C-c [` | Next / previous tab |
-| `C-c s` | Switch tab |
-| `C-c b` | Add bookmark |
-| `C-c j` | Jump to bookmark |
-| `C-c f` | Forget bookmark |
-| `C-c k` | Kill embr (daemon and buffer) |
-| `C-c ?` | Show top-level bindings |
-| `C-c q` | Close dispatch menu |
-| Mouse click | Click at coordinates |
-| Click and drag | Select text |
-| Scroll wheel | Scroll page |
+![dispatch menu](assets/dispatch-menu.png)
 
 ### Bookmarks
 
