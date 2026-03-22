@@ -138,6 +138,10 @@ All keys are forwarded directly to the browser. Typing, arrows, backspace, tab, 
 
 ![top-level bindkeys](assets/toplevel-bindkeys.png)
 
+With `embr-vimium-mode` enabled, `SPC ?` shows the vim-style bindings:
+
+![vimium bindkeys](assets/vimium-bindkeys.png)
+
 ### Browser commands
 
 Pressing `C-c` opens a transient dispatch menu (like Magit). The prefix key is configurable via `embr-dispatch-key`, but the underlying keys follow eww conventions where possible and should be kept as-is. By learning embr keys, you learn eww keys too, so if eww is ever updated to handle the modern web, switching has no learning curve.
