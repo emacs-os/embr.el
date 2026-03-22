@@ -36,7 +36,7 @@ Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakb
         embr-display-method 'headless
         embr-home-url "about:blank"
         embr-session-restore t
-        embr-tab-bar nil
+        embr-tab-bar t
         embr-proxy-type nil
         embr-proxy-address nil))
 ```
@@ -65,7 +65,7 @@ Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakb
         embr-display-method 'headless
         embr-home-url "about:blank"
         embr-session-restore t
-        embr-tab-bar nil
+        embr-tab-bar t
         embr-proxy-type nil
         embr-proxy-address nil))
 ```
