@@ -192,14 +192,6 @@ PDF viewing works.
 
 Mic, camera, and screen sharing do not work.
 
-### Will you add vim-like modal keybindings (like Vimium)?
-
-`embr-vimium-mode` is an opt-in minor mode. Off by default, zero impact on existing keybindings. Normal mode gives you `hjkl`, `gg`/`G`, `C-d`/`C-u`, `/`/`?` for search, and `i` to enter insert mode. Insert mode passes keys through to the browser. `C-g` or `ESC` returns to normal mode.
-
-```elisp
-(add-hook 'embr-mode-hook #'embr-vimium-mode)
-```
-
 ### How do I search?
 
 Any non-URL input in `C-c o` (Open URL) or passed as a string argument to `embr-browse` is treated as a search query. The default engine is Google. Set `embr-search-engine` to `'google`, `'brave`, `'duckduckgo`, `'bing`, `'yandex`, `'baidu`, or a custom URL string with `%s` for the query (e.g. `"https://search.brave.com/search?q=%s"`).
