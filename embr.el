@@ -2283,7 +2283,7 @@ DESCRIPTION is shown in the prompt."
     ("l" "Right" embr-dispatch-close :transient nil)
     ("0" "Line start" embr-dispatch-close :transient nil)
     ("$" "Line end" embr-dispatch-close :transient nil)
-    ("w" "Word start" embr-dispatch-close :transient nil)
+    ("w" "Word end" embr-dispatch-close :transient nil)
     ("e" "Word end" embr-dispatch-close :transient nil)
     ("b" "Word back" embr-dispatch-close :transient nil)]
    ["Scroll / Page"

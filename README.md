@@ -134,7 +134,7 @@ M-x embr-browse RET example.com RET
 
 ## Keybindings
 
-All keys are forwarded directly to the browser. Typing, arrows, backspace, tab, and enter work as expected. `C-x`, `M-x`, etc. stay free for Emacs. Top-level keybindings translate familiar Emacs motion keys into browser equivalents (`C-c ?` to view them all). `M-<` and `M->` go to the top and bottom of the page. For vim-style modal navigation, enable `embr-vimium-mode`.
+All keys are forwarded directly to the browser. Typing, arrows, backspace, tab, and enter work as expected. `C-x`, `M-x`, etc. stay free for Emacs. Top-level keybindings translate familiar Emacs motion keys into browser equivalents (`C-c ?` to view them all). For vim-style modal navigation, enable `embr-vimium-mode`.
 
 ![top-level bindkeys](assets/toplevel-bindkeys.png)
 
@@ -144,9 +144,8 @@ With `embr-vimium-mode` enabled, `SPC ?` shows the vim-style bindings:
 
 ### Browser commands
 
-Pressing `C-c` opens a transient dispatch menu (like Magit). The prefix key is configurable via `embr-dispatch-key`, but the underlying keys follow eww conventions where possible and should be kept as-is. By learning embr keys, you learn eww keys too, so if eww is ever updated to handle the modern web, switching has no learning curve.
+Pressing `C-c` or `SPC` (`embr-vimium-mode`) opens a transient dispatch menu (like Magit). The prefix key is configurable via `embr-dispatch-key`. The vimium leader key is configurable via `embr-vimium-leader`.
 
-To override the dispatch keys, find `(transient-define-prefix embr-dispatch ...)` in `embr.el`, copy it into your use-package `:config` block, and modify as needed. Same for `embr-dispatch-keys` (the `C-c ?` menu).
 
 ![dispatch menu](assets/dispatch.png)
 
