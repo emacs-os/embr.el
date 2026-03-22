@@ -145,13 +145,17 @@ async def main():
         user_data_dir = data_dir / "chromium-profile"
     user_data_dir.mkdir(parents=True, exist_ok=True)
 
-    # uBlock Origin extension (downloaded by setup.sh --ublock).
+    # Extensions (downloaded by setup.sh --ublock / --darkreader).
+    _ext_dirs = []
     ublock_dir = data_dir / "extensions" / "ublock" / "uBlock0.chromium"
-    _ublock_ext_args = []
     if ublock_dir.is_dir():
-        ext = str(ublock_dir)
-        _ublock_ext_args = [f"--load-extension={ext}"]
-        print(f"embr: uBlock Origin loaded from {ext}", file=sys.stderr)
+        _ext_dirs.append(str(ublock_dir))
+        print(f"embr: uBlock Origin loaded from {ublock_dir}", file=sys.stderr)
+    darkreader_dir = data_dir / "extensions" / "darkreader"
+    if darkreader_dir.is_dir():
+        _ext_dirs.append(str(darkreader_dir))
+        print(f"embr: Dark Reader loaded from {darkreader_dir}", file=sys.stderr)
+    _ext_args = [f"--load-extension={','.join(_ext_dirs)}"] if _ext_dirs else []
 
     # Display mode: headless (default), headed (real display),
     # headed-offscreen (virtual display via xvfb-run).
@@ -587,7 +591,7 @@ async def main():
             sw = params.get("screen_width", 1920)
             sh = params.get("screen_height", 1080)
             binary_path = ensure_binary()
-            chrome_args = get_default_stealth_args() + _ublock_ext_args
+            chrome_args = get_default_stealth_args() + _ext_args
             if _display_mode == "headed-offscreen":
                 chrome_args.append("--ozone-platform=x11")
             context_opts = dict(

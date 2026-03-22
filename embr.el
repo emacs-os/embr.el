@@ -314,6 +314,14 @@ See README.md for instructions."
   (embr--run-setup '("--ublock") "uBlock Origin updated."))
 
 ;;;###autoload
+(defun embr-install-or-update-darkreader ()
+  "Install or update Dark Reader to the latest release.
+Like uBlock Origin, requires one-time manual enable in headed mode
+via chrome://extensions."
+  (interactive)
+  (embr--run-setup '("--darkreader") "Dark Reader installed/updated."))
+
+;;;###autoload
 (defun embr-uninstall ()
   "Remove the Python venv, CloakBrowser, and browser profile.
 Does not remove the Emacs package itself."

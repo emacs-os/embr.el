@@ -66,6 +66,26 @@ do_ublock() {
     fi
 }
 
+do_darkreader() {
+    DARKREADER_DIR="$DATA_DIR/extensions/darkreader"
+    echo "Fetching latest Dark Reader release..."
+    DARKREADER_URL=$(curl -sL "https://api.github.com/repos/darkreader/darkreader/releases/latest" \
+        | grep -o '"browser_download_url": *"[^"]*darkreader-chrome\.zip"' \
+        | head -1 \
+        | cut -d'"' -f4)
+    if [ -n "$DARKREADER_URL" ]; then
+        DARKREADER_TMP="$DATA_DIR/darkreader.zip"
+        curl -sL -o "$DARKREADER_TMP" "$DARKREADER_URL"
+        rm -rf "$DARKREADER_DIR"
+        mkdir -p "$DARKREADER_DIR"
+        unzip -qo "$DARKREADER_TMP" -d "$DARKREADER_DIR"
+        rm -f "$DARKREADER_TMP"
+        echo "Dark Reader installed to $DARKREADER_DIR"
+    else
+        echo "WARNING: Could not fetch Dark Reader release URL." >&2
+    fi
+}
+
 case "$MODE" in
     --all)
         do_venv
@@ -78,8 +98,11 @@ case "$MODE" in
     --ublock)
         do_ublock
         ;;
+    --darkreader)
+        do_darkreader
+        ;;
     *)
-        echo "Usage: setup.sh [--all|--blocklist|--ublock]" >&2
+        echo "Usage: setup.sh [--all|--blocklist|--ublock|--darkreader]" >&2
         exit 1
         ;;
 esac

@@ -82,6 +82,7 @@ All management is done from Emacs, no terminal needed.
 | `M-x embr-setup-or-update-all` | Install or update CloakBrowser + ad blocklist + uBlock Origin (runs `setup.sh --all`) |
 | `M-x embr-update-blocklist` | Update the ad/tracker domain blocklist |
 | `M-x embr-update-ublock` | Update uBlock Origin to the latest release |
+| `M-x embr-install-or-update-darkreader` | Install or update [Dark Reader](https://github.com/darkreader/darkreader) to the latest release |
 | `M-x embr-uninstall` | Remove venv and browser profile. Optionally delete browser cache (runs `uninstall.sh`). |
 | `M-x embr-info` | Show diagnostic info about the installation |
 
@@ -175,7 +176,7 @@ For ad blocking beyond domain-level, you can install [uBlock Origin](https://git
    (setq embr-display-method 'headed)
    ```
 
-3. **Enable the extension.** Navigate to `chrome://extensions`, turn on **Developer mode** (top-right toggle), and enable uBlock Origin if it is not already active. (PR accepted if you find a way to automate this in our `embr.py`.)
+3. **Enable the extension.** Navigate to `chrome://extensions`, turn on **Developer mode** (top-right toggle), and enable uBlock Origin if it is not already active.
 
 4. **Switch to headed-offscreen** and restart embr. The extension persists in your browser profile across restarts.
 
@@ -183,6 +184,16 @@ For ad blocking beyond domain-level, you can install [uBlock Origin](https://git
    (setq embr-display-method 'headed-offscreen)
    ```
 
+
+### Dark Reader (optional)
+
+[Dark Reader](https://github.com/darkreader/darkreader) forces dark mode on websites that don't support it natively. Not included in `M-x embr-setup-or-update-all`. To install:
+
+1. Run `M-x embr-install-or-update-darkreader`.
+2. Enable it the same way as uBlock above (headed mode, `chrome://extensions`, Developer mode, enable).
+3. Switch back to `headed-offscreen` and restart. The extension persists in your profile.
+
+To manage, disable, or remove it, switch to `'headed` mode and visit `chrome://extensions`.
 
 ## FAQ
 
@@ -247,6 +258,12 @@ Unknown. Let us know.
 ### Windows?
 
 No.
+
+### Can I install other Chromium extensions?
+
+Yes. Switch to `'headed` mode, navigate to `chrome://extensions`, enable Developer mode, and install the extension manually (drag a `.crx` or load unpacked). Extensions persist in your browser profile at `~/.local/share/embr/chromium-profile/`. Switch back to `'headed-offscreen` when done.
+
+Chromium extensions do not auto-update in embr. See how `setup.sh` keeps uBlock and Dark Reader current via the GitHub releases API, and consider a similar approach for any extensions you add.
 
 ### Why not just use EXWM?
 
