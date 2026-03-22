@@ -1620,7 +1620,7 @@ DESCRIPTION is shown in the prompt."
     ("g" "Reload" embr-refresh)
     ("l" "Back" embr-back)
     ("r" "Forward" embr-forward)
-    ("p" "Past" embr-history-persistent)]
+    ("h" "History" embr-history-persistent)]
    ["Tabs"
     ("c" "New" embr-new-tab)
     ("x" "Close" embr-close-tab)
@@ -1630,10 +1630,10 @@ DESCRIPTION is shown in the prompt."
    ["Bookmarks"
     ("b" "Add" bookmark-set)
     ("j" "Jump" bookmark-jump)
-    ("f" "Forget" bookmark-delete)]
+    ("u" "Unbookmark" bookmark-delete)]
    ["Actions"
     ("o" "Open URL" embr-navigate)
-    ("h" "Follow hint" embr-follow-hint)
+    ("f" "Hint link" embr-follow-hint)
     ("w" "Copy URL" embr-copy-url)
     ("d" "Download" embr-download)
     ("v" "View text" embr-view-text)
