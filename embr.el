@@ -1704,13 +1704,10 @@ Tabs are equal width and fill the window, like i3 tabbed layout."
   "Close the tab clicked in the tab bar."
   (interactive "e")
   (when-let* ((idx (embr--tab-bar-event-index event)))
-    ;; Switch to the target tab first, then close it.
-    (embr--send `((cmd . "switch-tab") (index . ,idx))
-                (lambda (_resp)
-                  (embr--send '((cmd . "close-tab"))
-                              (lambda (resp)
-                                (embr--action-callback resp)
-                                (embr--update-tab-list-from-resp resp)))))))
+    (embr--send `((cmd . "close-tab") (index . ,idx))
+                (lambda (resp)
+                  (embr--action-callback resp)
+                  (embr--update-tab-list-from-resp resp)))))
 
 (defun embr--update-tab-list-from-resp (resp)
   "Update `embr--tab-list' from the `tabs' field in RESP if present."

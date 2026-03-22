@@ -1084,10 +1084,16 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
         if cmd == "close-tab":
             if len(context.pages) <= 1:
                 return {"error": "cannot close last tab"}
+            target_idx = params.get("index")
+            target = (context.pages[target_idx]
+                      if target_idx is not None and 0 <= target_idx < len(context.pages)
+                      else page)
             if screencast_active:
                 await stop_screencast()
-            await page.close()
-            page = context.pages[-1]
+            was_active = (target == page)
+            await target.close()
+            if was_active:
+                page = context.pages[-1]
             await page.bring_to_front()
             err = await _restart_screencast_after_tab_change()
             if err:
