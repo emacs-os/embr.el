@@ -234,16 +234,6 @@ Use `C-c d` to download. Hover over a link so the status bar shows the URL, then
 
 Downloads go through Chromium's network stack, so session cookies and authentication are preserved. Protected/login-gated downloads work the same as in a normal browser.
 
-### Why is history (C-c p) only for the current tab?
-
-`C-c p` uses Chromium's CDP `Page.getNavigationHistory` API, which returns the back/forward history for the active tab. This is the only history API Chromium exposes through its DevTools protocol. Full cross-session browser history lives in a SQLite database on disk, but accessing it directly would bypass the browser engine and is outside the scope of the Playwright/CDP interface.
-
-### What is the difference between C-c p and C-c o history?
-
-`C-c p` (Past) shows the current tab's session history from Chromium via CDP. It resets when the tab closes.
-
-`C-c o` (Open URL) has its own URL history built from URLs you have typed or searched. This persists across embr sessions within the same Emacs process. To clear it, use `C-u M-x embr-navigate`.
-
 ### Does this work on macOS?
 
 Unknown. Let us know.

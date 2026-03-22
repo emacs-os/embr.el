@@ -850,32 +850,56 @@ With prefix argument, clear URL history."
   (embr--send '((cmd . "forward"))
                      #'embr--action-callback))
 
-(defun embr-history ()
-  "Show browser history for the current tab and navigate to a selection."
+(defconst embr--history-db
+  (expand-file-name "~/.local/share/embr/chromium-profile/Default/History")
+  "Hardcoded path to Chromium's History SQLite database.")
+
+(defun embr-history-persistent ()
+  "Browse persistent Chromium history and navigate to a selection.
+Reads the History SQLite database directly.  Requires sqlite3 on PATH."
   (interactive)
-  (let* ((resp (embr--send-sync '((cmd . "history"))))
-         (entries (alist-get 'entries resp)))
-    (if (or (not entries) (null entries))
-        (message "embr: no history")
-      (let* ((candidates (mapcar (lambda (e)
-                                   (let ((title (alist-get 'title e))
-                                         (url (alist-get 'url e)))
-                                     (cons (if (string-empty-p title)
-                                               url
-                                             (format "%s  —  %s" title url))
-                                           url)))
-                                 entries))
-             (cands (mapcar #'car candidates))
-             (chosen (completing-read "History: "
-                                      (lambda (str pred action)
-                                        (if (eq action 'metadata)
-                                            '(metadata (display-sort-function . identity))
-                                          (complete-with-action action cands str pred)))
-                                      nil t)))
-        (when chosen
-          (let ((url (cdr (assoc chosen candidates))))
-            (embr--send `((cmd . "navigate") (url . ,url))
-                        #'embr--action-callback)))))))
+  (cond
+   ((not (executable-find "sqlite3"))
+    (message "embr: sqlite3 not found on PATH"))
+   ((not (file-exists-p embr--history-db))
+    (message "embr: no history database found"))
+   (t
+    ;; Copy to temp file to avoid SQLite lock conflicts with Chromium.
+    (let* ((tmp (make-temp-file "embr-hist" nil ".db"))
+           (query "SELECT title, url FROM urls WHERE hidden=0 AND title <> '' ORDER BY last_visit_time DESC LIMIT 200;"))
+      (unwind-protect
+          (progn
+            (copy-file embr--history-db tmp t)
+            (let ((output (shell-command-to-string
+                           (format "sqlite3 -separator '\t' %s %s"
+                                   (shell-quote-argument tmp)
+                                   (shell-quote-argument query)))))
+              (if (string-empty-p output)
+                  (message "embr: history is empty")
+                (let* ((lines (split-string output "\n" t))
+                       (candidates
+                        (mapcar (lambda (line)
+                                  (let* ((parts (split-string line "\t" nil))
+                                         (title (or (car parts) ""))
+                                         (url (or (cadr parts) "")))
+                                    (cons (if (string-empty-p title)
+                                              url
+                                            (format "%s  —  %s" title url))
+                                          url)))
+                                lines))
+                       (cands (mapcar #'car candidates))
+                       (chosen (completing-read
+                                "History (all): "
+                                (lambda (str pred action)
+                                  (if (eq action 'metadata)
+                                      '(metadata (display-sort-function . identity))
+                                    (complete-with-action action cands str pred)))
+                                nil t)))
+                  (when chosen
+                    (let ((url (cdr (assoc chosen candidates))))
+                      (embr--send `((cmd . "navigate") (url . ,url))
+                                  #'embr--action-callback)))))))
+        (delete-file tmp))))))
 
 (defun embr-quit ()
   "Kill the daemon and close the buffer."
@@ -1560,6 +1584,11 @@ DESCRIPTION is shown in the prompt."
   (interactive)
   (embr--clear-profile-paths '("Sessions") "sessions"))
 
+(defun embr-clear-browser-history ()
+  "Clear browser history."
+  (interactive)
+  (embr--clear-profile-paths '("History*") "browser history"))
+
 (defun embr-clear-url-history ()
   "Clear URL bar history."
   (interactive)
@@ -1591,7 +1620,7 @@ DESCRIPTION is shown in the prompt."
     ("g" "Reload" embr-refresh)
     ("l" "Back" embr-back)
     ("r" "Forward" embr-forward)
-    ("p" "Past" embr-history)]
+    ("p" "Past" embr-history-persistent)]
    ["Tabs"
     ("c" "New" embr-new-tab)
     ("x" "Close" embr-close-tab)
@@ -1616,6 +1645,7 @@ DESCRIPTION is shown in the prompt."
     ("3" "Clear local storage" embr-clear-local-storage)
     ("4" "Clear sessions" embr-clear-sessions)
     ("5" "Clear URL history" embr-clear-url-history)
+    ("6" "Clear browser history" embr-clear-browser-history)
     ("0" "Clear all (nuclear)" embr-clear-all)]
    ["Other"
     ("k" "Kill embr" embr-quit)

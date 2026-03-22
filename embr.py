@@ -1087,19 +1087,6 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
                 return {"ok": True, "url": page.url, "title": cached_title}
             return {"error": f"tab index out of range: {idx}"}
 
-        if cmd == "history":
-            session = await page.context.new_cdp_session(page)
-            try:
-                result = await session.send("Page.getNavigationHistory")
-                entries = [{"url": e["url"], "title": e["title"]}
-                           for e in result["entries"]
-                           if e["url"] != "about:blank"]
-                entries.reverse()
-                return {"ok": True, "entries": entries,
-                        "current": result["currentIndex"]}
-            finally:
-                await session.detach()
-
         if cmd == "query-url":
             try:
                 url = await page.evaluate("() => window.location.href")
