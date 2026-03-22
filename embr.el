@@ -1503,6 +1503,85 @@ If the mouse is not over a link, fall back to hint selection."
     ("C-c" "You are here" embr-dispatch)
     ("q" "Close menu" embr-dispatch-close)]])
 
+;; ── Privacy: data clearing ────────────────────────────────────────
+;;
+;; It seemed wise to just manually wipe state ourselves than trust a
+;; Playwright/Chromium API to do it for us, when it comes to wiping tracks.
+;;
+;; Safety measures for delete operations:
+;;
+;; 1. Hardcoded base path -- ~/.local/share/embr/chromium-profile/Default/
+;;    as a defconst, not derived from any variable at runtime.
+;; 2. Sanity check on entry -- verifies the profile dir string starts
+;;    with ~/.local/share/embr/ before doing anything.
+;; 3. Per-path check -- every expanded glob result is verified to be
+;;    inside the profile dir before deletion, refuses with error if not.
+;; 4. Nuclear option -- same sanity check, hardcoded path.
+
+(defconst embr--profile-dir
+  (expand-file-name "~/.local/share/embr/chromium-profile/Default/")
+  "Hardcoded path to Chromium profile Default directory.")
+
+(defun embr--clear-profile-paths (globs description)
+  "Delete GLOBS under the Chromium profile after confirmation.
+GLOBS is a list of file/directory names to match.
+DESCRIPTION is shown in the prompt."
+  (unless (and (stringp embr--profile-dir)
+               (string-prefix-p (expand-file-name "~/.local/share/embr/")
+                                embr--profile-dir))
+    (error "embr: profile path sanity check failed"))
+  (when (y-or-n-p (format "Clear %s? " description))
+    (dolist (glob globs)
+      (dolist (path (file-expand-wildcards
+                     (expand-file-name glob embr--profile-dir)))
+        (unless (string-prefix-p embr--profile-dir path)
+          (error "embr: refusing to delete outside profile: %s" path))
+        (if (file-directory-p path)
+            (delete-directory path t)
+          (delete-file path))))
+    (message "embr: cleared %s" description)))
+
+(defun embr-clear-cookies ()
+  "Clear browser cookies."
+  (interactive)
+  (embr--clear-profile-paths '("Cookies*") "cookies"))
+
+(defun embr-clear-cache ()
+  "Clear browser cache."
+  (interactive)
+  (embr--clear-profile-paths '("Cache" "Code Cache") "cache"))
+
+(defun embr-clear-local-storage ()
+  "Clear browser local storage."
+  (interactive)
+  (embr--clear-profile-paths '("Local Storage") "local storage"))
+
+(defun embr-clear-sessions ()
+  "Clear browser session data."
+  (interactive)
+  (embr--clear-profile-paths '("Sessions") "sessions"))
+
+(defun embr-clear-url-history ()
+  "Clear URL bar history."
+  (interactive)
+  (when (y-or-n-p "Clear URL history? ")
+    (setq embr--url-history nil)
+    (message "embr: URL history cleared")))
+
+(defun embr-clear-all ()
+  "Delete the entire chromium profile and clear URL history."
+  (interactive)
+  (when (y-or-n-p "Delete entire chromium profile and URL history? ")
+    (let ((profile (expand-file-name
+                    "~/.local/share/embr/chromium-profile")))
+      (unless (string-prefix-p (expand-file-name "~/.local/share/embr/")
+                               profile)
+        (error "embr: profile path sanity check failed"))
+      (when (file-directory-p profile)
+        (delete-directory profile t)))
+    (setq embr--url-history nil)
+    (message "embr: chromium profile deleted, URL history cleared")))
+
 (defun embr-dispatch-close ()
   "Close the dispatch menu."
   (interactive))
@@ -1534,7 +1613,14 @@ If the mouse is not over a link, fall back to hint selection."
     (":" "Execute JS" embr-execute-js)
     ("k" "Kill embr" embr-quit)
     ("q" "Close menu" embr-dispatch-close)
-    ("?" "Top-level bindings" embr-dispatch-keys)]])
+    ("?" "Top-level bindings" embr-dispatch-keys)]
+   ["Privacy"
+    ("1" "Clear cookies" embr-clear-cookies)
+    ("2" "Clear cache" embr-clear-cache)
+    ("3" "Clear local storage" embr-clear-local-storage)
+    ("4" "Clear sessions" embr-clear-sessions)
+    ("5" "Clear URL history" embr-clear-url-history)
+    ("0" "Clear all (nuclear)" embr-clear-all)]])
 
 ;; ── Keymap ─────────────────────────────────────────────────────────
 
