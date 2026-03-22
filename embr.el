@@ -228,13 +228,12 @@ at the cost of hover precision."
 
 (defcustom embr-display-method 'headless
   "How the browser display is managed.
-`headless' runs Chromium in headless mode (no window, no audio).
-`headed' runs Chromium on your real display (visible window, audio).
-`headed-offscreen' runs Chromium headed on a virtual display via
-xvfb-run (invisible window, audio works via PulseAudio/PipeWire)."
-  :type '(choice (const :tag "Headless (no window, no audio)" headless)
-                 (const :tag "Headed (visible window, audio)" headed)
-                 (const :tag "Headed offscreen (hidden window, audio)" headed-offscreen)))
+`headless' runs without a window.
+`headed' runs with a visible window (requires Xvfb).
+`headed-offscreen' runs with a hidden window (requires Xvfb)."
+  :type '(choice (const :tag "Headless" headless)
+                 (const :tag "Headed (requires Xvfb)" headed)
+                 (const :tag "Headed offscreen (requires Xvfb)" headed-offscreen)))
 
 (defcustom embr-dispatch-key "C-c"
   "Key that opens the transient dispatch menu.

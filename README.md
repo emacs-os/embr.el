@@ -118,7 +118,7 @@ All management is done from Emacs, no terminal needed. `setup.sh` builds in a te
 | `embr-download-directory` | directory | `~/Downloads/` | Directory where downloaded files are saved. |
 | `embr-frame-source` | symbol | `'screencast` | `'screencast` uses CDP screencast (recommended). `'screenshot` uses polling only. |
 | `embr-render-backend` | symbol | `'default` | `'default` uses JPEG file + create-image. `'canvas` requires canvas-patched Emacs + native module. |
-| `embr-display-method` | symbol | `'headless` | `'headless` (no window, no audio), `'headed` (visible window, audio), `'headed-offscreen` (hidden window via Xvfb, audio). |
+| `embr-display-method` | symbol | `'headless` | `'headless`, `'headed` (requires Xvfb), `'headed-offscreen` (requires Xvfb). |
 | `embr-dispatch-key` | string | `"C-c"` | Key that opens the transient dispatch menu. Must be set before embr is loaded. |
 
 
@@ -154,29 +154,18 @@ Standard Emacs bookmarks work. The dispatch menu (`C-c`) has shortcuts: `b` to a
 
 uBlock Origin and Dark Reader are Chromium extensions. After installing them, they need a one-time manual enable in headed mode (headless Chromium does not show extension UI).
 
-1. **Install Xvfb** (if you don't have it, needed for `headed-offscreen` mode):
-
-   ```sh
-   # Arch
-   sudo pacman -S xorg-server-xvfb
-   # Debian/Ubuntu
-   sudo apt install xvfb
-   # Fedora
-   sudo dnf install xorg-x11-server-Xvfb
-   ```
-
-2. **Switch to headed mode** so you can see the browser:
+1. **Switch to headed mode** so you can see the browser:
 
    ```elisp
    (setq embr-display-method 'headed)
    ```
 
-3. **Enable the extension.** Navigate to `chrome://extensions`, turn on **Developer mode** (top-right toggle), and enable the extension.
+2. **Enable the extension.** Navigate to `chrome://extensions`, turn on **Developer mode** (top-right toggle), and enable the extension.
 
-4. **Switch to headed-offscreen** and restart embr. Extensions persist in your browser profile across restarts.
+3. **Switch back to headless** and restart embr. Extensions persist in your browser profile across restarts.
 
    ```elisp
-   (setq embr-display-method 'headed-offscreen)
+   (setq embr-display-method 'headless)
    ```
 
 
@@ -245,7 +234,7 @@ No.
 
 ### Can I install other Chromium extensions?
 
-The Chrome Web Store does not work with CloakBrowser. Instead, switch to `'headed` mode, navigate to `chrome://extensions`, enable Developer mode, and install the extension manually (drag a `.crx` or load unpacked). Extensions persist in your browser profile at `~/.local/share/embr/chromium-profile/`. Switch back to `'headed-offscreen` when done.
+The Chrome Web Store does not work with CloakBrowser. Instead, switch to `'headed` mode, navigate to `chrome://extensions`, enable Developer mode, and install the extension manually (drag a `.crx` or load unpacked). Extensions persist in your browser profile at `~/.local/share/embr/chromium-profile/`. Switch back to `'headless` when done.
 
 Chromium extensions do not auto-update in embr. See how `setup.sh` keeps uBlock and Dark Reader current via the GitHub releases API, and consider a similar approach for any extensions you add.
 
