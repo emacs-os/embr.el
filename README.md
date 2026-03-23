@@ -102,7 +102,7 @@ Type=Application
 MimeType=x-scheme-handler/http;x-scheme-handler/https;
 ```
 
-Then uninstall your system Chromium and set this one as default.
+Then uninstall your system Chromium and set this one as default. Probably not recommended, but it could be fun.
 
 ## Setup
 
