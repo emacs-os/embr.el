@@ -203,7 +203,9 @@ To disable an extension temporarily, switch to `'headed` mode and visit `chrome:
 
 ### Workflow
 
-Need to register on a site? `M-x embr-passwd-generate` creates a password with `pwgen` and copies it to the kill ring. Paste it into the signup form. Then `M-x embr-passwd-add` to save the credentials before you forget. Leave the password prompt empty during add and it generates one for you.
+Need to register on a site? Run `M-x embr-passwd-add` first. Enter the site, login, leave the password blank to auto-generate one. Then `M-x embr-passwd-inject` to fill the form: pick the entry, focus the login field, press `C-j`, focus the password field, press `C-j`. All embr navigation works while selecting fields (click, tab, `C-c f` hints).
+
+`M-x embr-passwd-generate` is also available standalone if you just need a password on the clipboard.
 
 ### Commands
 
@@ -215,6 +217,7 @@ Need to register on a site? `M-x embr-passwd-generate` creates a password with `
 | `embr-passwd-get` | Copy password for a site to kill ring |
 | `embr-passwd-list` | Show all sites in the vault |
 | `embr-passwd-generate` | Generate a password and copy to kill ring |
+| `embr-passwd-inject` | Fill login/password fields on the current page |
 
 ### Configuration
 
