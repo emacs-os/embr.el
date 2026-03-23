@@ -327,3 +327,5 @@ EXWM is X11 only. There is also an experimental Wayland equivalent in the same s
 ### Credits
 
 Screenshots use [moody](https://github.com/tarsius/moody) for the mode line, [Aporetic Sans Mono](https://github.com/protesilaos/aporetic) for the font, and the [ef-dream](https://github.com/protesilaos/ef-themes) theme.
+
+This project was built with [Codex 5.3 Very High](https://openai.com/codex) and [Claude Opus 4.6](https://claude.ai/code).
