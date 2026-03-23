@@ -203,7 +203,7 @@ To disable an extension temporarily, switch to `'headed` mode and visit `chrome:
 
 ### Workflow
 
-Need to register on a site? Run `M-x embr-passwd-add` first. Enter the site name, your username or email, and leave the password blank to auto-generate one. Then `M-x embr-passwd-inject` to fill the signup form: pick the entry you just created, focus each field, press `C-j` to fill it. All embr navigation works while selecting fields (click, tab, `C-c f` hints).
+Need to register on a site? Run `M-x embr-passwd-add` first. Enter the site name, your username or email, and leave the password blank to auto-generate one. Then `M-x embr-passwd-inject` to interactively fill the signup form: pick the entry you just created, focus each field, press `C-j` to fill it. All embr navigation works while selecting fields (click, tab, `C-c f` hints).
 
 `M-x embr-passwd-generate` is also available standalone if you just need a password on the clipboard.
 
