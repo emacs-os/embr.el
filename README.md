@@ -75,6 +75,12 @@ Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakb
 (global-goto-address-mode 1)
 ```
 
+**Tip:** A wider frame fits the browser better than the default Emacs dimensions:
+
+```elisp
+(set-frame-size nil 150 40)
+```
+
 ## Setup
 
 After installing, run `M-x embr-install-or-update-cloakbrowser` to create the Python venv and download CloakBrowser. This is the only required step. If you skip it, `M-x embr-browse` will offer to run it for you.
