@@ -102,7 +102,7 @@ Type=Application
 MimeType=x-scheme-handler/http;x-scheme-handler/https;
 ```
 
-Then uninstall your system Chromium and set this one as default: `xdg-settings set default-web-browser chromium.desktop`.
+Then uninstall your system Chromium and set this one as default: `xdg-settings set default-web-browser chromium.desktop`. Probably not recommended, but it could be fun!
 
 ## Setup
 
