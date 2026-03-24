@@ -1456,6 +1456,15 @@ BUF is the embr buffer that owns this timer."
                              (view-mode 1))
                            (display-buffer buf))))))
 
+(defun embr-open-in-eww ()
+  "Open the current page URL in eww."
+  (interactive)
+  (let ((url embr--current-url))
+    (if (string-empty-p url)
+        (user-error "No URL to open")
+      (eww url)
+      (message "Opened in eww: %s" url))))
+
 (defun embr--mouse-image-coords ()
   "Return mouse position as image coordinates (X . Y), or nil."
   (let* ((pos (mouse-pixel-position))
@@ -2423,7 +2432,8 @@ DESCRIPTION is shown in the prompt."
     ("a" "Reader" embr-reader)
     ("p" "Page info" embr-page-info)
     ("v" "View text" embr-view-text)
-    ("e" "View source" embr-view-source)]
+    ("e" "Open in eww" embr-open-in-eww)
+    ("E" "View source" embr-view-source)]
    ["Privacy"
     ("t" "Proxy info" embr-proxy-info)
     ("1" "Clear cookies" embr-clear-cookies)
@@ -2659,7 +2669,8 @@ DESCRIPTION is shown in the prompt."
     ("a" "Reader" embr-reader)
     ("p" "Page info" embr-page-info)
     ("v" "View text" embr-view-text)
-    ("e" "View source" embr-view-source)]
+    ("e" "Open in eww" embr-open-in-eww)
+    ("E" "View source" embr-view-source)]
    ["Privacy"
     ("t" "Proxy info" embr-proxy-info)
     ("1" "Clear cookies" embr-clear-cookies)
