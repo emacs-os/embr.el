@@ -108,7 +108,7 @@ Then uninstall your system Chromium and set this one as default. Probably not re
 
 After installing, run `M-x embr-install-or-update-cloakbrowser` to create the Python venv and download CloakBrowser. This is the only required step. If you skip it, `M-x embr-browse` will offer to run it for you.
 
-Everything else is optional. The blocklist, uBlock Origin, and Dark Reader are independent add-ons. Each has its own install and remove command. You pick what you want.
+Everything else is optional. The blocklist, uBlock Origin, and Dark Reader are independent add-ons. Each has its own install and remove command. You pick what you want. Extensions need a [one-time enable in headed mode](#enabling-extensions-in-headed-mode) after installing.
 
 | Command | What it does |
 |---------|-------------|
@@ -195,7 +195,7 @@ Pressing `C-c` or `SPC` (`embr-vimium-mode`) opens a transient dispatch menu (li
 
 ### Enabling extensions in headed mode
 
-uBlock Origin and Dark Reader are Chromium extensions. After installing them, they need a one-time manual enable in headed mode (headless Chromium does not show extension UI). Headed mode requires Xvfb.
+uBlock Origin and Dark Reader are Chromium extensions. After installing them, they need a one-time manual enable in headed mode (headless Chromium does not show extension UI). Headed mode requires Xvfb (`pacman -S xorg-server-xvfb`).
 
 1. **Switch to headed mode** so you can see the browser:
 
