@@ -835,6 +835,9 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
             # Poll URL/title and push changes to Emacs.
             async def _metadata_loop():
                 nonlocal cached_title, _last_nav_url
+                tick = 0
+                # Cache background tab signatures for change detection.
+                _bg_sigs = {}  # id(page) -> (url, title)
                 while running and page and not page.is_closed():
                     try:
                         url = page.url
@@ -849,9 +852,34 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
                     if title and title != cached_title:
                         cached_title = title
                         changed = True
-                    if changed:
-                        emit({"metadata": True, "url": url,
-                              "title": cached_title})
+                    # Every 4th tick (~2s), poll all tab titles so inactive
+                    # tabs stay fresh in the Emacs tab bar.
+                    tabs_payload = None
+                    tick += 1
+                    if tick % 4 == 0 and len(context.pages) > 1:
+                        bg_changed = False
+                        entries = []
+                        for i, p in enumerate(context.pages):
+                            try:
+                                t = await p.title()
+                            except Exception:
+                                t = ""
+                            entries.append({"index": i, "title": t,
+                                            "url": p.url,
+                                            "active": p == page})
+                            if p != page:
+                                sig = (p.url, t)
+                                if _bg_sigs.get(id(p)) != sig:
+                                    _bg_sigs[id(p)] = sig
+                                    bg_changed = True
+                        if bg_changed:
+                            tabs_payload = entries
+                    if changed or tabs_payload is not None:
+                        msg = {"metadata": True, "url": url,
+                               "title": cached_title}
+                        if tabs_payload is not None:
+                            msg["tabs"] = tabs_payload
+                        emit(msg)
                     await asyncio.sleep(0.5)
 
             asyncio.ensure_future(_metadata_loop())

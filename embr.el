@@ -622,7 +622,9 @@ Respects `embr-display-method' for display modes."
                         (setq last-frame resp))
                        ((alist-get 'metadata resp)
                         ;; Navigation metadata — update URL/title immediately.
-                        (embr--update-metadata resp))
+                        (embr--update-metadata resp)
+                        ;; Metadata may carry a background tab-title refresh.
+                        (embr--update-tab-list-from-resp resp))
                        ((alist-get 'screencast_error resp)
                         ;; Screencast error notification — always show to user.
                         (message "embr: %s" (alist-get 'screencast_error resp)))
@@ -941,7 +943,10 @@ Dispatch to the active backend for display, then update metadata."
                "\n")))))
 
 (defun embr--update-metadata (resp)
-  "Update URL and title from command RESP if present."
+  "Update URL and title from command RESP if present.
+Also sync the active tab entry in `embr--tab-list' so that
+`embr--render-tab-bar' sees fresh data without waiting for a tab
+command round-trip."
   (let ((changed nil))
     (when-let* ((url (alist-get 'url resp)))
       (when (stringp url)
@@ -954,6 +959,12 @@ Dispatch to the active backend for display, then update metadata."
           (setq embr--current-title title
                 changed t))))
     (when changed
+      ;; Keep the active tab entry in embr--tab-list in sync so the
+      ;; tab bar renders the current title immediately.
+      (dolist (tab embr--tab-list)
+        (when (eq (alist-get 'active tab) t)
+          (setf (alist-get 'title tab) embr--current-title)
+          (setf (alist-get 'url tab) embr--current-url)))
       (rename-buffer (format "%s%s*"
                              (cond (embr--incognito-flag "*embr incognito: ")
                                    ((embr--url-proxied-p embr--current-url) "*embr proxy: ")
