@@ -394,6 +394,8 @@ binary are installed."
 Note: uBlock Origin requires one-time manual setup in headed mode.
 See README.md for instructions."
   (interactive)
+  (when (eq embr-browser-engine 'chromium)
+    (user-error "embr: sideloaded extensions are not compatible with the chromium engine.  Install uBlock Origin from the Chrome Web Store in headed mode instead"))
   (embr--run-setup '("--ublock") "uBlock Origin installed/updated."))
 
 ;;;###autoload
@@ -402,6 +404,8 @@ See README.md for instructions."
 Like uBlock Origin, requires one-time manual enable in headed mode
 via chrome://extensions."
   (interactive)
+  (when (eq embr-browser-engine 'chromium)
+    (user-error "embr: sideloaded extensions are not compatible with the chromium engine.  Install Dark Reader from the Chrome Web Store in headed mode instead"))
   (embr--run-setup '("--darkreader") "Dark Reader installed/updated."))
 
 ;; Safety measures for management delete operations:
