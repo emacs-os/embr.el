@@ -112,7 +112,7 @@ After installing, run `M-x embr-install-or-update-cloakbrowser` to create the Py
 
 If you prefer vanilla Chromium instead of CloakBrowser, run `M-x embr-install-or-update-chromium` and set `embr-browser-engine` to `'chromium`. See the [configuration table](#configuration) for details.
 
-Everything else is optional. The blocklist, uBlock Origin, and Dark Reader are independent add-ons. Each has its own install and remove command. You pick what you want. Extensions need a [one-time enable in headed mode](#enabling-extensions-in-headed-mode) after installing.
+Everything else is optional. The blocklist is engine-independent. Extensions (uBlock Origin, Dark Reader) are handled differently depending on your engine -- see [Installing extensions](#installing-extensions).
 
 | Command | What it does |
 |---------|-------------|
@@ -124,6 +124,7 @@ Everything else is optional. The blocklist, uBlock Origin, and Dark Reader are i
 | `M-x embr-remove-blocklist` | Remove the domain blocklist |
 | `M-x embr-remove-ublock` | Remove uBlock Origin |
 | `M-x embr-remove-darkreader` | Remove Dark Reader |
+| `M-x embr-remove-profiles` | Remove browser profiles (cookies, sessions, extension state) for both engines |
 | `M-x embr-uninstall` | Remove everything (`~/.local/share/embr/`, `~/.cloakbrowser/`, `~/.cache/ms-playwright/`) |
 | `M-x embr-info` | Show what is installed |
 
@@ -136,7 +137,8 @@ All management is done from Emacs, no terminal needed. CloakBrowser setup builds
 | Python venv | `~/.local/share/embr/.venv/` |
 | CloakBrowser binary | `~/.cloakbrowser/` |
 | Playwright Chromium binary | `~/.cache/ms-playwright/` |
-| Cookies & sessions | `~/.local/share/embr/chromium-profile/` |
+| Cookies & sessions (CloakBrowser) | `~/.local/share/embr/chromium-profile/` |
+| Cookies & sessions (Chromium) | `~/.local/share/embr/playwright-profile/` |
 
 ## Configuration
 
@@ -200,9 +202,22 @@ Pressing `C-c` or `SPC` (`embr-vimium-mode`) opens a transient dispatch menu (li
 
 **Domain-level blocklist.** The StevenBlack/hosts list (~82K ad and tracker domains) intercepts and kills requests before they hit the network. Works in headless mode, no extension needed.
 
-### Enabling extensions in headed mode
+### Installing extensions
 
-uBlock Origin and Dark Reader are Chromium extensions. After installing them, they need a one-time manual enable in headed mode (headless Chromium does not show extension UI). Headed mode requires Xvfb (`pacman -S xorg-server-xvfb`).
+Extension installation depends on which engine you use.
+
+#### CloakBrowser (`'cloakbrowser`)
+
+CloakBrowser cannot access the Chrome Web Store. Use the built-in sideloading commands instead:
+
+| Command | What it does |
+|---------|-------------|
+| `M-x embr-install-or-update-ublock` | Install or update [uBlock Origin](https://github.com/gorhill/uBlock) |
+| `M-x embr-install-or-update-darkreader` | Install or update [Dark Reader](https://github.com/darkreader/darkreader) |
+| `M-x embr-remove-ublock` | Remove uBlock Origin |
+| `M-x embr-remove-darkreader` | Remove Dark Reader |
+
+After installing, extensions need a one-time manual enable in headed mode (headless Chromium does not show extension UI). Headed mode requires Xvfb (`pacman -S xorg-server-xvfb`).
 
 1. **Switch to headed mode** so you can see the browser:
 
@@ -212,14 +227,31 @@ uBlock Origin and Dark Reader are Chromium extensions. After installing them, th
 
 2. **Enable the extension.** Navigate to `chrome://extensions`, turn on **Developer mode** (top-right toggle), and enable the extension.
 
-3. **Switch back to headless** and restart embr. Extensions persist in your browser profile across restarts.
+3. **Switch back** to your normal display method and restart embr. Extensions persist in your browser profile across restarts.
 
    ```elisp
-   (setq embr-display-method 'headless)
+   (setq embr-display-method 'headless) ; or 'headed-offscreen
    ```
 
+#### Chromium (`'chromium`)
 
-To disable an extension temporarily, switch to `'headed` mode and visit `chrome://extensions`.
+Vanilla Chromium has full access to the Chrome Web Store. This is the recommended way to install extensions -- they auto-update and persist in your browser profile.
+
+1. **Temporarily switch to headed mode:**
+
+   ```elisp
+   (setq embr-display-method 'headed)
+   ```
+
+2. **Restart embr**, navigate to the Chrome Web Store, and install the extensions you want (uBlock Origin, Dark Reader, etc.).
+
+3. **Switch back** to your normal display method and restart embr. Extensions persist across restarts.
+
+   ```elisp
+   (setq embr-display-method 'headless) ; or 'headed-offscreen
+   ```
+
+The sideloading commands (`embr-install-or-update-ublock`, etc.) are not compatible with the chromium engine due to Chrome dropping Manifest V2 support. Use the Web Store instead.
 
 ## Password Manager
 

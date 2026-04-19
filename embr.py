@@ -199,6 +199,8 @@ async def main():
         _incognito_tmpdir = tempfile.mkdtemp(prefix="embr-incognito-")
         user_data_dir = Path(_incognito_tmpdir)
         print(f"embr: incognito profile at {user_data_dir}", file=sys.stderr)
+    elif _ENGINE == "chromium":
+        user_data_dir = data_dir / "playwright-profile"
     else:
         user_data_dir = data_dir / "chromium-profile"
     user_data_dir.mkdir(parents=True, exist_ok=True)

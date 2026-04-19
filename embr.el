@@ -477,6 +477,44 @@ deletion.  DESCRIPTION is used in messages."
           (embr--safe-delete file embr--data-dir-prefix "ad blocklist"))
       (message "embr: blocklist not installed"))))
 
+;;;###autoload
+(defun embr-remove-profiles ()
+  "Remove browser profiles for both engines.
+Deletes chromium-profile/ and playwright-profile/ inside
+~/.local/share/embr/.  Useful for clearing stale extension state
+or starting fresh.  Does not remove extensions, venv, or browser
+binaries."
+  (interactive)
+  (let ((cb-profile (expand-file-name "chromium-profile/"
+                                       embr--data-dir-prefix))
+        (pw-profile (expand-file-name "playwright-profile/"
+                                       embr--data-dir-prefix))
+        (removed nil))
+    (unless (string-prefix-p embr--data-dir-prefix cb-profile)
+      (error "embr: CloakBrowser profile path sanity check failed"))
+    (unless (string-prefix-p embr--data-dir-prefix pw-profile)
+      (error "embr: Playwright profile path sanity check failed"))
+    (let ((cb-exists (file-directory-p cb-profile))
+          (pw-exists (file-directory-p pw-profile)))
+      (unless (or cb-exists pw-exists)
+        (user-error "embr: no profiles to remove"))
+      (when (yes-or-no-p
+             (format "Remove browser profiles? This deletes cookies, sessions, and extension state.%s%s "
+                     (if cb-exists
+                         (format "\n  %s" cb-profile) "")
+                     (if pw-exists
+                         (format "\n  %s" pw-profile) "")))
+        (when cb-exists
+          (embr--safe-delete cb-profile embr--data-dir-prefix
+                             "CloakBrowser profile")
+          (push "CloakBrowser" removed))
+        (when pw-exists
+          (embr--safe-delete pw-profile embr--data-dir-prefix
+                             "Playwright profile")
+          (push "Playwright" removed))
+        (message "embr: removed %s profile(s)"
+                 (string-join (nreverse removed) " and "))))))
+
 (defvar embr--url-history)
 
 ;;;###autoload
@@ -518,7 +556,8 @@ Does not remove the Emacs package itself."
   (let ((venv-dir (expand-file-name ".venv" embr--data-dir))
         (cb-dir (expand-file-name ".cloakbrowser" "~"))
         (pw-dir (expand-file-name ".cache/ms-playwright" "~"))
-        (profile-dir (expand-file-name "chromium-profile" embr--data-dir))
+        (cb-profile (expand-file-name "chromium-profile" embr--data-dir))
+        (pw-profile (expand-file-name "playwright-profile" embr--data-dir))
         (blocklist (expand-file-name "blocklist.txt" embr--data-dir))
         (ublock-dir (expand-file-name "extensions/ublock" embr--data-dir))
         (darkreader-dir (expand-file-name "extensions/darkreader" embr--data-dir)))
@@ -530,7 +569,8 @@ Does not remove the Emacs package itself."
   Venv:       %s (%s)
   CloakBrowser: %s (%s)
   Playwright: %s (%s)
-  Profile:    %s (%s)
+  CB Profile: %s (%s)
+  PW Profile: %s (%s)
   Blocklist:  %s
   uBlock:     %s
   Dark Reader:%s
@@ -542,7 +582,8 @@ Does not remove the Emacs package itself."
              venv-dir (if (file-directory-p venv-dir) "OK" "MISSING")
              cb-dir (if (file-directory-p cb-dir) "OK" "not installed")
              pw-dir (if (file-directory-p pw-dir) "OK" "not installed")
-             profile-dir (if (file-directory-p profile-dir) "exists" "not yet created")
+             cb-profile (if (file-directory-p cb-profile) "exists" "not yet created")
+             pw-profile (if (file-directory-p pw-profile) "exists" "not yet created")
              (if (file-exists-p blocklist) "installed" "not installed")
              (if (file-directory-p ublock-dir) "installed" "not installed")
              (if (file-directory-p darkreader-dir) "installed" "not installed")
