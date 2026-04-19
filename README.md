@@ -231,6 +231,8 @@ Vanilla Chromium has full access to the Chrome Web Store. This is the recommende
 
 The sideloading commands (`embr-install-or-update-ublock`, etc.) are not compatible with the chromium engine due to Chrome dropping Manifest V2 support. Use the Web Store instead.
 
+**Switching from CloakBrowser to Chromium:** If you previously used CloakBrowser with sideloaded extensions (uBlock, Dark Reader), you may see manifest version errors when switching to the chromium engine. To fix this, run `M-x embr-remove-profiles` to clear stale extension state, then restart Emacs with `embr-browser-engine` set to `'chromium` for a fresh start.
+
 ## Password Manager
 
 ![embr-passwd demo](assets/Screencast_20260323_091912.gif)
