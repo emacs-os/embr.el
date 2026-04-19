@@ -120,11 +120,11 @@ def _install_proxy_extension(rules, data_dir):
     ext_dir = Path(data_dir) / "extensions" / "embr-proxy"
     ext_dir.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "manifest_version": 2,
+        "manifest_version": 3,
         "name": "embr-proxy",
         "version": "1.0",
         "permissions": ["proxy"],
-        "background": {"scripts": ["background.js"]},
+        "background": {"service_worker": "background.js"},
     }
     pac_script = _generate_pac(rules)
     background_js = (
