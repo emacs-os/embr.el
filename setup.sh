@@ -9,7 +9,7 @@ MODE="${1:---cloakbrowser}"
 
 mkdir -p "$DATA_DIR"
 
-do_venv() {
+do_cloakbrowser() {
     cleanup() {
         if [ $? -ne 0 ]; then
             echo "ERROR: Setup failed. Cleaning up..." >&2
@@ -120,7 +120,7 @@ do_darkreader() {
 
 case "$MODE" in
     --cloakbrowser)
-        do_venv
+        do_cloakbrowser
         ;;
     --chromium)
         do_chromium
