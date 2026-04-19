@@ -22,14 +22,16 @@
 
 ;;; Commentary:
 
-;; embr runs a headless Chromium (via CloakBrowser/Playwright) and
-;; displays screenshots in an Emacs buffer.  Clicks, keystrokes, and
-;; scroll events are forwarded to the browser.  The daemon streams
-;; JPEG frames via a temp file on disk, giving live visual feedback.
+;; embr runs headless Chromium and displays frames in an Emacs buffer.
+;; Clicks, keystrokes, and scroll events are forwarded to the browser.
+;; Two browser engines are supported: CloakBrowser (default,
+;; anti-fingerprinting) and vanilla Playwright Chromium.  Frames are
+;; delivered via CDP screencast, with an optional canvas backend that
+;; renders directly to a pixel buffer over a Unix socket.
 ;;
 ;; The Python daemon (`embr.py') controls the browser through
-;; CloakBrowser, a stealth Chromium with source-level fingerprint
-;; patches.  Communication uses JSON lines over stdin/stdout.
+;; Playwright.  Communication uses JSON lines over stdin/stdout,
+;; serialized with Emacs 30.1's native C JSON (`json-serialize').
 
 ;;; Code:
 
