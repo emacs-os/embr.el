@@ -1,7 +1,7 @@
 ## embr.el
 **Em**acs **Br**owser
 
-Emacs is the display server. Headless Chromium is the renderer, using either [CloakBrowser](https://cloakbrowser.dev) (default, anti-fingerprinting, closed-source patches) or vanilla Playwright Chromium (fully open source). Frame transport uses CDP screencast. Emacs simulation keys pass through to the browser (similar to EXWM), and an optional `embr-vimium-mode` provides modal navigation for evil-mode users. Emacs canvas (optional) is also supported for added performance. If you build Emacs with the [canvas patch](https://github.com/minad/emacs-canvas-patch) (see [./canvasmacs](./canvasmacs)), embr renders frames directly to a pixel buffer via a native C module.
+Emacs is the display server. Headless Chromium is the renderer, using either [CloakBrowser](https://cloakbrowser.dev) (default, anti-fingerprinting, closed-source patches) or vanilla Playwright Chromium (fully open source). Frame transport uses CDP screencast. Emacs simulation keys pass through to the browser (similar to EXWM), and an optional `embr-vimium-mode` provides modal navigation for evil-mode users. Emacs canvas (optional) significantly improves rendering performance. If you build Emacs with the [canvas patch](https://github.com/minad/emacs-canvas-patch) (see [./canvasmacs](./canvasmacs)) and set `embr-render-backend` to `'canvas`, embr renders frames directly to a pixel buffer via a native C module. We are excited about and advocating for this patch to be [mainlined into Emacs](https://debbugs.gnu.org/cgi/bugreport.cgi?bug=80281#389) -- embr serves as a proof of concept that canvas enables real-time buffer rendering in Emacs.
 
 ![embr screenshot](assets/screenshot-v2.png)
 
