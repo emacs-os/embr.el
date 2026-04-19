@@ -66,6 +66,13 @@ alongside the .el in the builds dir, so this just works.")
   "Path to the embr Python daemon script."
   :type 'file)
 
+(defcustom embr-browser-engine 'cloakbrowser
+  "Browser engine to use.
+`cloakbrowser' uses CloakBrowser (anti-fingerprinting Chromium).
+`chromium' uses vanilla Playwright Chromium."
+  :type '(choice (const :tag "CloakBrowser" cloakbrowser)
+                 (const :tag "Chromium (Playwright)" chromium)))
+
 (defcustom embr-default-width 1280
   "Default viewport width in pixels."
   :type 'integer)
@@ -138,10 +145,10 @@ Useful for sites that rely on press-and-hold interactions."
 (defcustom embr-color-scheme 'dark
   "Browser color scheme preference.
 Controls `prefers-color-scheme' CSS media query.  Set to nil to let
-CloakBrowser choose from its fingerprint profile."
+the browser choose (CloakBrowser uses its fingerprint profile)."
   :type '(choice (const :tag "Dark" dark)
                  (const :tag "Light" light)
-                 (const :tag "Auto (CloakBrowser default)" nil)))
+                 (const :tag "Auto (browser default)" nil)))
 
 (defcustom embr-dom-caret-hack nil
   "Whether to inject a fake DOM caret in focused text fields.
@@ -329,12 +336,20 @@ with QUERY and return nil."
 ;; ── Setup & management ─────────────────────────────────────────────
 
 (defun embr--setup-needed-p ()
-  "Return non-nil if setup.sh needs to be run.
-Checks that both the venv Python and the cloakbrowser package exist."
+  "Return non-nil if setup is needed for the configured browser engine.
+Checks that the venv Python exists and the engine package and browser
+binary are installed."
   (or (not (file-exists-p embr-python))
-      (not (zerop
-            (call-process embr-python nil nil nil
-                          "-c" "import cloakbrowser")))))
+      (pcase embr-browser-engine
+        ('cloakbrowser
+         (not (zerop (call-process embr-python nil nil nil
+                                   "-c" "import cloakbrowser"))))
+        ('chromium
+         (not (zerop
+               (call-process
+                embr-python nil nil nil "-c"
+                "import os; from playwright.sync_api import sync_playwright; b = sync_playwright().start(); p = b.chromium.executable_path; b.stop(); assert os.path.isfile(p)"))))
+        (_ t))))
 
 (defun embr--run-setup (args msg)
   "Run setup.sh with ARGS and display MSG on completion."
@@ -360,6 +375,12 @@ Checks that both the venv Python and the cloakbrowser package exist."
   "Install or update the Python venv and CloakBrowser binary."
   (interactive)
   (embr--run-setup '("--cloakbrowser") "Done. You can now run M-x embr-browse."))
+
+;;;###autoload
+(defun embr-install-or-update-chromium ()
+  "Install or update the Python venv and Playwright Chromium binary."
+  (interactive)
+  (embr--run-setup '("--chromium") "Done. You can now run M-x embr-browse."))
 
 ;;;###autoload
 (defun embr-install-or-update-blocklist ()
@@ -399,6 +420,10 @@ via chrome://extensions."
 (defconst embr--browsers-dir
   (expand-file-name "~/.cloakbrowser/")
   "Hardcoded path to CloakBrowser's browser cache.")
+
+(defconst embr--playwright-browsers-dir
+  (expand-file-name "~/.cache/ms-playwright/")
+  "Hardcoded path to Playwright's browser cache.")
 
 (defun embr--safe-delete (path allowed-prefix description)
   "Delete PATH if it is inside ALLOWED-PREFIX.
@@ -456,8 +481,9 @@ deletion.  DESCRIPTION is used in messages."
 
 ;;;###autoload
 (defun embr-uninstall ()
-  "Remove everything: venv, profile, extensions, browser cache.
-Deletes ~/.local/share/embr/ and ~/.cloakbrowser/ entirely.
+  "Remove everything: venv, profile, extensions, browser caches.
+Deletes ~/.local/share/embr/, ~/.cloakbrowser/, and
+~/.cache/ms-playwright/ entirely.
 Does not remove the Emacs package itself."
   (interactive)
   (unless (and (stringp embr--data-dir-prefix)
@@ -467,43 +493,55 @@ Does not remove the Emacs package itself."
   (unless (and (stringp embr--browsers-dir)
                (string-prefix-p (expand-file-name "~/.cloakbrowser/")
                                 embr--browsers-dir))
-    (error "embr: browsers dir sanity check failed"))
+    (error "embr: CloakBrowser dir sanity check failed"))
+  (unless (and (stringp embr--playwright-browsers-dir)
+               (string-prefix-p (expand-file-name "~/.cache/ms-playwright/")
+                                embr--playwright-browsers-dir))
+    (error "embr: Playwright dir sanity check failed"))
   (when (yes-or-no-p
-         "Remove ALL embr data (~/.local/share/embr/ and ~/.cloakbrowser/)? ")
+         "Remove ALL embr data (~/.local/share/embr/, ~/.cloakbrowser/, ~/.cache/ms-playwright/)? ")
     (when (file-directory-p embr--data-dir-prefix)
       (delete-directory embr--data-dir-prefix t))
     (when (file-directory-p embr--browsers-dir)
       (delete-directory embr--browsers-dir t))
+    (when (file-directory-p embr--playwright-browsers-dir)
+      (delete-directory embr--playwright-browsers-dir t))
     (setq embr--url-history nil)
-    (message "embr: removed %s and %s"
-             embr--data-dir-prefix embr--browsers-dir)))
+    (message "embr: removed %s, %s, and %s"
+             embr--data-dir-prefix embr--browsers-dir
+             embr--playwright-browsers-dir)))
 
 ;;;###autoload
 (defun embr-info ()
   "Show diagnostic info about the embr installation."
   (interactive)
   (let ((venv-dir (expand-file-name ".venv" embr--data-dir))
-        (browsers-dir (expand-file-name ".cloakbrowser" "~"))
+        (cb-dir (expand-file-name ".cloakbrowser" "~"))
+        (pw-dir (expand-file-name ".cache/ms-playwright" "~"))
         (profile-dir (expand-file-name "chromium-profile" embr--data-dir))
         (blocklist (expand-file-name "blocklist.txt" embr--data-dir))
         (ublock-dir (expand-file-name "extensions/ublock" embr--data-dir))
         (darkreader-dir (expand-file-name "extensions/darkreader" embr--data-dir)))
     (message "embr installation:
+  Engine:     %s
   Source:     %s
   Python:     %s (%s)
   Script:     %s (%s)
   Venv:       %s (%s)
-  Browsers:   %s (%s)
+  CloakBrowser: %s (%s)
+  Playwright: %s (%s)
   Profile:    %s (%s)
   Blocklist:  %s
   uBlock:     %s
   Dark Reader:%s
   Setup needed: %s"
+             embr-browser-engine
              embr--directory
              embr-python (if (file-exists-p embr-python) "OK" "MISSING")
              embr-script (if (file-exists-p embr-script) "OK" "MISSING")
              venv-dir (if (file-directory-p venv-dir) "OK" "MISSING")
-             browsers-dir (if (file-directory-p browsers-dir) "OK" "MISSING")
+             cb-dir (if (file-directory-p cb-dir) "OK" "not installed")
+             pw-dir (if (file-directory-p pw-dir) "OK" "not installed")
              profile-dir (if (file-directory-p profile-dir) "exists" "not yet created")
              (if (file-exists-p blocklist) "installed" "not installed")
              (if (file-directory-p ublock-dir) "installed" "not installed")
@@ -581,10 +619,12 @@ Respects `embr-display-method' for display modes."
               (message "embr: xvfb-run not found, falling back to headless"))
             inner))
          (process-environment
-          (cons (format "EMBR_DISPLAY=%s"
-                        (if xvfb "headed-offscreen"
-                          (symbol-name embr-display-method)))
-                process-environment)))
+          (cons (format "EMBR_ENGINE=%s"
+                        (symbol-name embr-browser-engine))
+                (cons (format "EMBR_DISPLAY=%s"
+                              (if xvfb "headed-offscreen"
+                                (symbol-name embr-display-method)))
+                      process-environment))))
     (setq embr--process
           (make-process
            :name "embr"
@@ -2114,7 +2154,10 @@ If the mouse is not over a link, fall back to hint selection."
   "Launch an incognito embr session and navigate to URL."
   (interactive "sURL: ")
   (when (embr--setup-needed-p)
-    (error "embr: Run M-x embr-install-or-update-cloakbrowser first"))
+    (error "embr: Run M-x %s first"
+           (if (eq embr-browser-engine 'chromium)
+               "embr-install-or-update-chromium"
+             "embr-install-or-update-cloakbrowser")))
   ;; Create buffer.
   (unless (buffer-live-p embr--incognito-buffer)
     (setq embr--incognito-buffer (generate-new-buffer "*embr incognito*"))
@@ -2136,11 +2179,13 @@ If the mouse is not over a link, fall back to hint selection."
                           inner)
                 inner))
              (process-environment
-              (cons "EMBR_INCOGNITO=1"
-                    (cons (format "EMBR_DISPLAY=%s"
-                                  (if xvfb "headed-offscreen"
-                                    (symbol-name embr-display-method)))
-                          process-environment))))
+              (cons (format "EMBR_ENGINE=%s"
+                            (symbol-name embr-browser-engine))
+                    (cons "EMBR_INCOGNITO=1"
+                          (cons (format "EMBR_DISPLAY=%s"
+                                        (if xvfb "headed-offscreen"
+                                          (symbol-name embr-display-method)))
+                                process-environment)))))
         (setq embr--process
               (make-process
                :name "embr-incognito"
@@ -2382,14 +2427,20 @@ DESCRIPTION is shown in the prompt."
   (interactive)
   (embr--chrome-navigate "chrome://gpu"))
 
-(transient-define-prefix embr-dispatch-chrome ()
-  "Show chrome:// internal pages."
-  ["Chrome Internals\
+(defun embr--chrome-internals-heading ()
+  "Return the heading string for the chrome internals dispatch menu."
+  (if (eq embr-browser-engine 'cloakbrowser)
+      "Chrome Internals\
 \nWarning: CloakBrowser patches Chromium heavily, so settings may be\
 \ngrayed out or have no effect.  Switching to 'headed mode may help for\
 \nsome pages.  For extension management, see README FAQ.  CloakBrowser\
 \nis configured to be performant and private out of the box, so\
 \nhopefully no serious tweaks needed :)"
+    "Chrome Internals"))
+
+(transient-define-prefix embr-dispatch-chrome ()
+  "Show chrome:// internal pages."
+  [:description embr--chrome-internals-heading
    ("s" "Settings" embr-chrome-settings)
    ("e" "Extensions" embr-chrome-extensions)
    ("f" "Flags" embr-chrome-flags)
@@ -2829,11 +2880,15 @@ Lisp with a URL argument, navigate to that URL."
   (interactive)
   ;; Check if setup has been run.
   (when (embr--setup-needed-p)
-    (if (y-or-n-p "embr: Setup needed (venv or CloakBrowser missing). Run now? ")
-        (progn
-          (embr-install-or-update-cloakbrowser)
-          (error "embr: Setup started in *embr-setup* buffer. Run M-x embr-browse again when it finishes"))
-      (error "embr: Run M-x embr-install-or-update-cloakbrowser first")))
+    (let ((install-fn (if (eq embr-browser-engine 'chromium)
+                          #'embr-install-or-update-chromium
+                        #'embr-install-or-update-cloakbrowser)))
+      (if (y-or-n-p (format "embr: Setup needed (venv or %s missing). Run now? "
+                            embr-browser-engine))
+          (progn
+            (funcall install-fn)
+            (user-error "embr: Setup started in *embr-setup* buffer.  Run M-x embr-browse again when it finishes"))
+        (user-error "embr: Run M-x %s first" (symbol-name install-fn)))))
   ;; Create buffer if needed.
   (unless (buffer-live-p embr--normal-buffer)
     (setq embr--normal-buffer (generate-new-buffer "*embr*"))

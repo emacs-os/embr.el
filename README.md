@@ -1,7 +1,7 @@
 ## embr.el
 **Em**acs **Br**owser
 
-Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakbrowser.dev) is the renderer. Frame transport uses CDP screencast. Emacs simulation keys pass through to the browser (similar to EXWM), and an optional `embr-vimium-mode` provides modal navigation for evil-mode users. Emacs canvas (optional) is also supported for added performance. If you build Emacs with the [canvas patch](https://github.com/minad/emacs-canvas-patch) (see [./canvasmacs](./canvasmacs)), embr renders frames directly to a pixel buffer via a native C module.
+Emacs is the display server. Headless Chromium is the renderer, using either [CloakBrowser](https://cloakbrowser.dev) (default, anti-fingerprinting, closed-source patches) or vanilla Playwright Chromium (fully open source). Frame transport uses CDP screencast. Emacs simulation keys pass through to the browser (similar to EXWM), and an optional `embr-vimium-mode` provides modal navigation for evil-mode users. Emacs canvas (optional) is also supported for added performance. If you build Emacs with the [canvas patch](https://github.com/minad/emacs-canvas-patch) (see [./canvasmacs](./canvasmacs)), embr renders frames directly to a pixel buffer via a native C module.
 
 ![embr screenshot](assets/screenshot-v2.png)
 
@@ -22,7 +22,8 @@ Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakb
            :files ("*.el" "*.py" "*.sh" "native/*.c" "native/Makefile"))
   ;; :hook (embr-mode . embr-vimium-mode)
   :config
-  (setq embr-hover-rate 30
+  (setq embr-browser-engine 'cloakbrowser
+        embr-hover-rate 30
         embr-default-width 1280
         embr-default-height 720
         embr-screen-width 1920
@@ -50,7 +51,8 @@ Emacs is the display server. Headless Chromium via [CloakBrowser](https://cloakb
              :files ("*.el" "*.py" "*.sh" "native/*.c" "native/Makefile"))
   ;; :hook (embr-mode . embr-vimium-mode)
   :config
-  (setq embr-hover-rate 30
+  (setq embr-browser-engine 'cloakbrowser
+        embr-hover-rate 30
         embr-default-width 1280
         embr-default-height 720
         embr-screen-width 1920
@@ -108,40 +110,45 @@ Then uninstall your system Chromium and set this one as default. Probably not re
 
 After installing, run `M-x embr-install-or-update-cloakbrowser` to create the Python venv and download CloakBrowser. This is the only required step. If you skip it, `M-x embr-browse` will offer to run it for you.
 
+If you prefer vanilla Chromium instead of CloakBrowser, run `M-x embr-install-or-update-chromium` and set `embr-browser-engine` to `'chromium`. See the [configuration table](#configuration) for details.
+
 Everything else is optional. The blocklist, uBlock Origin, and Dark Reader are independent add-ons. Each has its own install and remove command. You pick what you want. Extensions need a [one-time enable in headed mode](#enabling-extensions-in-headed-mode) after installing.
 
 | Command | What it does |
 |---------|-------------|
-| `M-x embr-install-or-update-cloakbrowser` | Install or update Python venv + CloakBrowser binary (required) |
+| `M-x embr-install-or-update-cloakbrowser` | Install or update Python venv + CloakBrowser binary |
+| `M-x embr-install-or-update-chromium` | Install or update Python venv + Playwright Chromium binary |
 | `M-x embr-install-or-update-blocklist` | Install or update the [StevenBlack/hosts](https://github.com/StevenBlack/hosts) domain blocklist |
 | `M-x embr-install-or-update-ublock` | Install or update [uBlock Origin](https://github.com/gorhill/uBlock) |
 | `M-x embr-install-or-update-darkreader` | Install or update [Dark Reader](https://github.com/darkreader/darkreader) |
 | `M-x embr-remove-blocklist` | Remove the domain blocklist |
 | `M-x embr-remove-ublock` | Remove uBlock Origin |
 | `M-x embr-remove-darkreader` | Remove Dark Reader |
-| `M-x embr-uninstall` | Remove everything (`~/.local/share/embr/` and `~/.cloakbrowser/`) |
+| `M-x embr-uninstall` | Remove everything (`~/.local/share/embr/`, `~/.cloakbrowser/`, `~/.cache/ms-playwright/`) |
 | `M-x embr-info` | Show what is installed |
 
-All management is done from Emacs, no terminal needed. `setup.sh` builds in a temp venv and swaps atomically, so install and update are the same operation.
+All management is done from Emacs, no terminal needed. CloakBrowser setup builds in a temp venv and swaps atomically. Chromium setup creates the venv the same way if none exists, then downloads the browser binary separately.
 
 ### Where state is stored
 
-| What | Path (0.40+) | Path (0.30) |
-|------|--------------|-------------|
-| Python venv | `~/.local/share/embr/.venv/` | same |
-| Browser binary | `~/.cloakbrowser/` | `~/.cache/camoufox/` |
-| Cookies & sessions | `~/.local/share/embr/chromium-profile/` | `~/.local/share/embr/firefox-profile/` |
+| What | Path |
+|------|------|
+| Python venv | `~/.local/share/embr/.venv/` |
+| CloakBrowser binary | `~/.cloakbrowser/` |
+| Playwright Chromium binary | `~/.cache/ms-playwright/` |
+| Cookies & sessions | `~/.local/share/embr/chromium-profile/` |
 
 ## Configuration
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
+| `embr-browser-engine` | symbol | `'cloakbrowser` | `'cloakbrowser` uses CloakBrowser (anti-fingerprinting Chromium). `'chromium` uses vanilla Playwright Chromium. |
 | `embr-hover-rate` | integer | `30` | Mouse hover tracking rate in Hz. Higher values (e.g. 60) give lower-latency hover and can help with finicky buttons. Lower values (e.g. 20) reduce CDP traffic and may improve click reliability on slower machines. Setting this too high risks input lockups. Recommend 30 for `'default` backend, 60 for `'canvas`. |
 | `embr-default-width` | integer | `1280` | Viewport width in pixels |
 | `embr-default-height` | integer | `720` | Viewport height in pixels |
 | `embr-screen-width` | integer | `1920` | Screen width reported to websites (should be >= viewport) |
 | `embr-screen-height` | integer | `1080` | Screen height reported to websites (should be >= viewport) |
-| `embr-color-scheme` | symbol/nil | `'dark` | `'dark`, `'light`, or `nil` to let CloakBrowser choose. Controls `prefers-color-scheme`. |
+| `embr-color-scheme` | symbol/nil | `'dark` | `'dark`, `'light`, or `nil` to let the browser choose. Controls `prefers-color-scheme`. |
 | `embr-search-engine` | symbol/string/function | `'google` | `'google`, `'brave`, `'duckduckgo`, `'bing`, `'yandex`, `'baidu`, custom URL with `%s`, or a function taking one string argument (the query). Non-URL input is passed to the function instead of navigating the browser. |
 | `embr-search-prefix` | string/nil | `nil` | String prepended to queries when `embr-search-engine` is a function |
 | `embr-click-method` | symbol | `'immediate` | `'atomic` defers mousedown until drag detected, better iframe compat. `'immediate` sends mousedown instantly, for press-and-hold sites. |
@@ -263,9 +270,9 @@ Requires `pwgen` for password generation.
 
 ### Why CloakBrowser?
 
-Plain Playwright was fast but made the modern web nearly unusable. Corporate apps would immediately flag it as a bot and throw captchas. We switched to Camoufox (a hardened Firefox fork) and bot detection stopped, but it came with a significant performance cost. Camoufox masks timing signals across a large portion of the Firefox stack, which adds up.
+Plain Playwright is fast but makes the modern web nearly unusable. Corporate apps immediately flag it as a bot and throw captchas. CloakBrowser is a Chromium-based alternative that applies stealth via source-level C++ patches rather than JS overrides. The overhead is low, bot detection goes away, and performance stays. That is why it is the default engine.
 
-CloakBrowser is a Chromium-based alternative that applies stealth via source-level C++ patches rather than JS overrides. The overhead is much lower. After switching, bot detection stayed gone and performance came back. That is why we use it.
+CloakBrowser's stealth patches are not open source. If that is a concern, or if you simply do not need anti-fingerprinting, set `embr-browser-engine` to `'chromium` to use vanilla Playwright Chromium instead.
 
 ### Does audio/video work?
 

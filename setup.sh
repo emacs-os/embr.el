@@ -35,6 +35,38 @@ do_venv() {
     rm -rf "$VENV_DIR.old"
 }
 
+do_chromium() {
+    # Create venv with playwright if it doesn't exist.
+    # If a venv exists (e.g. from --cloakbrowser), playwright is already
+    # present as a dependency -- just download the browser binary.
+    if [ ! -d "$VENV_DIR" ]; then
+        cleanup() {
+            if [ $? -ne 0 ]; then
+                echo "ERROR: Setup failed. Cleaning up..." >&2
+                rm -rf "$TMP_VENV"
+                if [ -d "$VENV_DIR.old" ]; then
+                    mv "$VENV_DIR.old" "$VENV_DIR"
+                    echo "Rolled back to previous venv." >&2
+                fi
+                exit 1
+            fi
+        }
+        trap cleanup EXIT
+
+        rm -rf "$TMP_VENV"
+        python3 -m venv "$TMP_VENV"
+        "$TMP_VENV/bin/pip" install playwright
+
+        if [ -d "$VENV_DIR" ]; then
+            mv "$VENV_DIR" "$VENV_DIR.old"
+        fi
+        mv "$TMP_VENV" "$VENV_DIR"
+        rm -rf "$VENV_DIR.old"
+    fi
+    # Download Playwright's bundled Chromium.
+    "$VENV_DIR/bin/python" -m playwright install chromium
+}
+
 do_blocklist() {
     BLOCKLIST="$DATA_DIR/blocklist.txt"
     echo "Downloading ad blocklist..."
@@ -90,6 +122,9 @@ case "$MODE" in
     --cloakbrowser)
         do_venv
         ;;
+    --chromium)
+        do_chromium
+        ;;
     --blocklist)
         do_blocklist
         ;;
@@ -100,7 +135,7 @@ case "$MODE" in
         do_darkreader
         ;;
     *)
-        echo "Usage: setup.sh [--cloakbrowser|--blocklist|--ublock|--darkreader]" >&2
+        echo "Usage: setup.sh [--cloakbrowser|--chromium|--blocklist|--ublock|--darkreader]" >&2
         exit 1
         ;;
 esac

@@ -14,6 +14,11 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 _INCOGNITO = os.environ.get("EMBR_INCOGNITO") == "1"
+_ENGINE = os.environ.get("EMBR_ENGINE", "cloakbrowser")
+if _ENGINE not in ("cloakbrowser", "chromium"):
+    print(f"embr: unknown EMBR_ENGINE={_ENGINE!r}, falling back to cloakbrowser",
+          file=sys.stderr)
+    _ENGINE = "cloakbrowser"
 FRAME_PATH = os.path.join(
     tempfile.gettempdir(),
     "embr-incognito-frame.jpg" if _INCOGNITO else "embr-frame.jpg")
@@ -137,8 +142,9 @@ def _install_proxy_extension(rules, data_dir):
 
 async def main():
     from playwright.async_api import async_playwright
-    from cloakbrowser.download import ensure_binary
-    from cloakbrowser.config import IGNORE_DEFAULT_ARGS, get_default_stealth_args
+    if _ENGINE == "cloakbrowser":
+        from cloakbrowser.download import ensure_binary
+        from cloakbrowser.config import IGNORE_DEFAULT_ARGS, get_default_stealth_args
     pw = await async_playwright().start()
     perf = PerfLog()
     context = None
@@ -216,7 +222,7 @@ async def main():
     if _display_mode == "headed-offscreen":
         os.environ.pop("WAYLAND_DISPLAY", None)
         os.environ["GDK_BACKEND"] = "x11"
-    print(f"embr: engine=cloakbrowser display={_display_mode}", file=sys.stderr)
+    print(f"embr: engine={_ENGINE} display={_display_mode}", file=sys.stderr)
 
     def emit(obj):
         sys.stdout.write(json.dumps(obj) + "\n")
@@ -643,22 +649,38 @@ async def main():
             height = params.get("height", 720)
             sw = params.get("screen_width", 1920)
             sh = params.get("screen_height", 1080)
-            binary_path = ensure_binary()
-            chrome_args = get_default_stealth_args() + _ext_args
-            if _display_mode == "headed-offscreen":
-                chrome_args.append("--ozone-platform=x11")
-            context_opts = dict(
-                user_data_dir=str(user_data_dir),
-                executable_path=binary_path,
-                headless=_use_headless,
-                args=chrome_args,
-                ignore_default_args=IGNORE_DEFAULT_ARGS + [
-                    "--mute-audio", "--disable-extensions",
-                ],
-                viewport={"width": width, "height": height},
-                screen={"width": sw, "height": sh},
-                accept_downloads=True,
-            )
+            if _ENGINE == "cloakbrowser":
+                binary_path = ensure_binary()
+                chrome_args = get_default_stealth_args() + _ext_args
+                if _display_mode == "headed-offscreen":
+                    chrome_args.append("--ozone-platform=x11")
+                context_opts = dict(
+                    user_data_dir=str(user_data_dir),
+                    executable_path=binary_path,
+                    headless=_use_headless,
+                    args=chrome_args,
+                    ignore_default_args=IGNORE_DEFAULT_ARGS + [
+                        "--mute-audio", "--disable-extensions",
+                    ],
+                    viewport={"width": width, "height": height},
+                    screen={"width": sw, "height": sh},
+                    accept_downloads=True,
+                )
+            else:
+                chrome_args = list(_ext_args)
+                if _display_mode == "headed-offscreen":
+                    chrome_args.append("--ozone-platform=x11")
+                context_opts = dict(
+                    user_data_dir=str(user_data_dir),
+                    headless=_use_headless,
+                    args=chrome_args,
+                    ignore_default_args=[
+                        "--mute-audio", "--disable-extensions",
+                    ],
+                    viewport={"width": width, "height": height},
+                    screen={"width": sw, "height": sh},
+                    accept_downloads=True,
+                )
             color_scheme = params.get("color_scheme")
             if color_scheme:
                 context_opts["color_scheme"] = color_scheme
