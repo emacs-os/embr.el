@@ -1216,7 +1216,7 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
 
         if cmd == "close-tab":
             if len(context.pages) <= 1:
-                return {"error": "cannot close last tab"}
+                return {"last_tab": True}
             target_idx = params.get("index")
             target = (context.pages[target_idx]
                       if target_idx is not None and 0 <= target_idx < len(context.pages)

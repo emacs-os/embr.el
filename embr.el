@@ -1822,13 +1822,16 @@ Tabs are equal width and fill the window, like i3 tabbed layout."
                   (embr--update-tab-list-from-resp resp)))))
 
 (defun embr--tab-bar-close (event)
-  "Close the tab clicked in the tab bar."
+  "Close the tab clicked in the tab bar.
+If this is the last tab, kill the embr buffer."
   (interactive "e")
   (when-let* ((idx (embr--tab-bar-event-index event)))
     (embr--send `((cmd . "close-tab") (index . ,idx))
                 (lambda (resp)
-                  (embr--action-callback resp)
-                  (embr--update-tab-list-from-resp resp)))))
+                  (if (alist-get 'last_tab resp)
+                      (kill-buffer (current-buffer))
+                    (embr--action-callback resp)
+                    (embr--update-tab-list-from-resp resp))))))
 
 (defun embr--update-tab-list-from-resp (resp)
   "Update `embr--tab-list' from the `tabs' field in RESP if present."
@@ -1863,12 +1866,15 @@ Tabs are equal width and fill the window, like i3 tabbed layout."
                   (embr--update-tab-list-from-resp resp)))))
 
 (defun embr-close-tab ()
-  "Close the current tab."
+  "Close the current tab.
+If this is the last tab, kill the embr buffer."
   (interactive)
   (embr--send '((cmd . "close-tab"))
               (lambda (resp)
-                (embr--action-callback resp)
-                (embr--update-tab-list-from-resp resp))))
+                (if (alist-get 'last_tab resp)
+                    (kill-buffer (current-buffer))
+                  (embr--action-callback resp)
+                  (embr--update-tab-list-from-resp resp)))))
 
 (defun embr-next-tab ()
   "Switch to the next tab."
