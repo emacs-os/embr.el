@@ -5,6 +5,18 @@ Emacs is the display server. Headless Chromium is the renderer, using either [Cl
 
 ![embr screenshot](assets/screenshot-v2.png)
 
+### Dynamic viewport sizing
+
+embr now defaults to dynamic viewport sizing, where the browser viewport matches your Emacs window and resizes automatically. Update your `use-package` config to:
+
+```elisp
+embr-viewport-sizing 'dynamic
+embr-screen-width (display-pixel-width)
+embr-screen-height (display-pixel-height)
+```
+
+This replaces the old `embr-default-width`, `embr-default-height`, `embr-screen-width`, and `embr-screen-height` hardcoded values. See `C-h v embr-viewport-sizing` for details on the trade-offs and how to restore the previous fixed behavior.
+
 ## Prerequisites
 
 - Python 3.10+
