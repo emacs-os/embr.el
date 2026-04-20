@@ -651,6 +651,9 @@ Does not remove the Emacs package itself."
 (defvar embr--canvas-socket nil "Network process for canvas frame socket.")
 (defvar embr--canvas-recv-buf "" "Accumulator for partial canvas socket packets.")
 (defvar embr--canvas-last-seq 0 "Sequence number of the last rendered canvas frame.")
+(defvar embr--canvas-stream-id 0 "Current canvas frame stream generation.")
+(defvar embr--canvas-mutation-flag nil
+  "Non-nil while canvas clear/resize is mutating the canvas image.")
 (defvar embr--canvas-stale-count 0 "Number of stale/out-of-order frames dropped.")
 (defvar embr--canvas-error-count 0 "Consecutive canvas blit errors.")
 (defvar embr--canvas-frame-count 0 "Total frames blitted via canvas backend.")
@@ -745,6 +748,8 @@ Respects `embr-display-method' for display modes."
                         ;; Screencast error notification — always show to user.
                         (message "embr: %s" (alist-get 'screencast_error resp)))
                        (t
+                        ;; Keep canvas stream generation synced.
+                        (embr--canvas-maybe-update-stream-id resp)
                         ;; Update tab bar if response includes tabs.
                         (embr--update-tab-list-from-resp resp)
                         ;; Command response — dispatch to callback.
@@ -794,6 +799,7 @@ Respects `embr-display-method' for display modes."
 
 (declare-function embr-canvas-supported-p "embr-canvas")
 (declare-function embr-canvas-blit-jpeg "embr-canvas")
+(declare-function embr-canvas-clear "embr-canvas")
 (declare-function embr-canvas-version "embr-canvas")
 
 (defconst embr--canvas-max-errors 5
@@ -928,6 +934,30 @@ SOCKET-PATH is the daemon frame socket (used by canvas backend)."
   "Report canvas failure.  No automatic fallback."
   (message "embr: canvas backend failed — restart embr or check native module"))
 
+(defun embr--canvas-maybe-update-stream-id (resp)
+  "Update canvas stream generation from RESP if present."
+  (when-let* ((stream-id (alist-get 'stream_id resp)))
+    (when (and (integerp stream-id) (>= stream-id 0))
+      (unless (eql stream-id embr--canvas-stream-id)
+        (setq embr--canvas-stream-id stream-id
+              embr--canvas-last-seq 0
+              embr--canvas-recv-buf "")))))
+
+(defun embr--canvas-next-id ()
+  "Return a fresh uninterned canvas identifier."
+  (cl-incf embr--canvas-resize-count)
+  (make-symbol (format "embr-canvas-%s-%d"
+                       (buffer-name)
+                       embr--canvas-resize-count)))
+
+(defun embr--canvas-with-mutation (thunk)
+  "Call THUNK while suppressing canvas blits in this buffer."
+  (let ((old embr--canvas-mutation-flag))
+    (setq embr--canvas-mutation-flag t)
+    (unwind-protect
+        (funcall thunk)
+      (setq embr--canvas-mutation-flag old))))
+
 (defun embr--canvas-socket-filter (proc data)
   "Handle binary frame data from canvas socket PROC.
 Parse length-prefixed packets, drop stale/out-of-order frames,
@@ -939,23 +969,37 @@ via a process property so buffer-local vars resolve correctly."
         (setq embr--canvas-recv-buf (concat embr--canvas-recv-buf data))
         (let ((done nil))
           (while (and (not done)
-                      (>= (length embr--canvas-recv-buf) 16))
+                      (>= (length embr--canvas-recv-buf) 20))
             (let* ((hdr embr--canvas-recv-buf)
                    (seq (embr--read-u32 hdr 0))
+                   (stream-id (embr--read-u32 hdr 16))
                    (jpeg-len (embr--read-u32 hdr 12))
-                   (total (+ 16 jpeg-len)))
+                   (total (+ 20 jpeg-len)))
               (if (< (length embr--canvas-recv-buf) total)
                   (setq done t)
-                (let ((jpeg-data (substring embr--canvas-recv-buf 16 total))
+                (let ((jpeg-data (substring embr--canvas-recv-buf 20 total))
                       (_width (embr--read-u32 hdr 4))
                       (_height (embr--read-u32 hdr 8)))
                   (setq embr--canvas-recv-buf
                         (substring embr--canvas-recv-buf total))
-                  ;; Drop stale or out-of-order packets.  Handle uint32
-                  ;; wraparound: if delta is huge (> 2^31), seq wrapped.
-                  (if (and (<= seq embr--canvas-last-seq)
-                           (< (- embr--canvas-last-seq seq) #x80000000))
-                      (progn (cl-incf embr--canvas-stale-count) nil)
+                  ;; Stream generation changed (tab switch/screencast restart).
+                  (when (> stream-id embr--canvas-stream-id)
+                    (setq embr--canvas-stream-id stream-id
+                          embr--canvas-last-seq 0))
+                  (cond
+                   ;; Packet from an older stream: always drop.
+                   ((< stream-id embr--canvas-stream-id)
+                    (cl-incf embr--canvas-stale-count))
+                   ;; Drop stale or out-of-order packets.  Handle uint32
+                   ;; wraparound: if delta is huge (> 2^31), seq wrapped.
+                   ((and (<= seq embr--canvas-last-seq)
+                         (< (- embr--canvas-last-seq seq) #x80000000))
+                    (cl-incf embr--canvas-stale-count))
+                   ;; Skip blits while canvas is being mutated.
+                   (embr--canvas-mutation-flag
+                    (setq embr--canvas-last-seq seq)
+                    (cl-incf embr--canvas-stale-count))
+                   (t
                     (setq embr--canvas-last-seq seq)
                     (when embr--canvas-image
                       (condition-case err
@@ -974,7 +1018,7 @@ via a process property so buffer-local vars resolve correctly."
                          (cl-incf embr--canvas-error-count)
                          (message "embr: canvas blit error %d: %s"
                                   embr--canvas-error-count
-                                  (error-message-string err)))))))))))))))
+                                  (error-message-string err))))))))))))))))
 
 
 (defun embr--canvas-socket-sentinel (_proc event)
@@ -985,7 +1029,7 @@ via a process property so buffer-local vars resolve correctly."
 (defun embr--backend-init-canvas (socket-path)
   "Initialize the canvas render backend.
 Connect to SOCKET-PATH and create the canvas image in the buffer."
-  (let ((canvas-id (intern (format "embr-canvas-%s" (buffer-name)))))
+  (let ((canvas-id (embr--canvas-next-id)))
     (setq embr--canvas-image
           `(image :type canvas
                   :canvas-id ,canvas-id
@@ -994,6 +1038,7 @@ Connect to SOCKET-PATH and create the canvas image in the buffer."
   (setq embr--canvas-recv-buf ""
         embr--canvas-error-count 0
         embr--canvas-last-seq 0
+        embr--canvas-stream-id 0
         embr--canvas-stale-count 0)
   (let ((inhibit-read-only t))
     (erase-buffer)
@@ -1019,28 +1064,45 @@ Connect to SOCKET-PATH and create the canvas image in the buffer."
     (delete-process embr--canvas-socket))
   (setq embr--canvas-socket nil
         embr--canvas-image nil
+        embr--canvas-stream-id 0
         embr--canvas-recv-buf ""))
+
+(defun embr--canvas-clear ()
+  "Clear the current canvas pixel buffer in place."
+  (when embr--canvas-image
+    (embr--canvas-with-mutation
+     (lambda ()
+       (setq embr--canvas-recv-buf ""
+             embr--canvas-last-seq 0)
+       (if (fboundp 'embr-canvas-clear)
+           (embr-canvas-clear
+            embr--canvas-image
+            (plist-get (cdr embr--canvas-image) :canvas-width)
+            (plist-get (cdr embr--canvas-image) :canvas-height))
+         ;; Compatibility path for older module builds.
+         (embr--canvas-resize
+          (plist-get (cdr embr--canvas-image) :canvas-width)
+          (plist-get (cdr embr--canvas-image) :canvas-height)))))))
 
 (defun embr--canvas-resize (width height)
   "Recreate the canvas image at WIDTH x HEIGHT.
 Allocate a fresh canvas-id so the C module creates a new pixel
 buffer at the correct size."
-  (cl-incf embr--canvas-resize-count)
-  (let ((canvas-id (intern (format "embr-canvas-%s-%d"
-                                   (buffer-name)
-                                   embr--canvas-resize-count))))
-    (setq embr--canvas-image
-          `(image :type canvas
-                  :canvas-id ,canvas-id
-                  :canvas-width ,width
-                  :canvas-height ,height)))
-  (setq embr--canvas-recv-buf ""
-        embr--canvas-last-seq 0)
-  (let ((inhibit-read-only t))
-    (erase-buffer)
-    (insert (propertize " " 'display embr--canvas-image))
-    (put-text-property (point-min) (point-max) 'pointer 'arrow)
-    (goto-char (point-min))))
+  (embr--canvas-with-mutation
+   (lambda ()
+     (let ((canvas-id (embr--canvas-next-id)))
+       (setq embr--canvas-image
+             `(image :type canvas
+                     :canvas-id ,canvas-id
+                     :canvas-width ,width
+                     :canvas-height ,height)))
+     (setq embr--canvas-recv-buf ""
+           embr--canvas-last-seq 0)
+     (let ((inhibit-read-only t))
+       (erase-buffer)
+       (insert (propertize " " 'display embr--canvas-image))
+       (put-text-property (point-min) (point-max) 'pointer 'arrow)
+       (goto-char (point-min))))))
 
 ;; ── Backend debug ─────────────────────────────────────────────────
 
@@ -1123,11 +1185,11 @@ command round-trip."
     (message "embr error: %s" err))
   (embr--update-metadata resp)
   ;; After a tab switch the daemon restarts screencast on the new page.
-  ;; Recreate the canvas with a fresh pixel buffer (same as a window
-  ;; resize) so stale content from the old tab is cleared immediately.
+  ;; Clear the existing canvas immediately so stale content from the
+  ;; old tab is not shown while fresh frames arrive.
   (when (and (alist-get 'tabs resp)
              (equal embr--active-backend "canvas"))
-    (embr--canvas-resize embr--viewport-width embr--viewport-height)))
+    (embr--canvas-clear)))
 
 ;; ── Commands ───────────────────────────────────────────────────────
 
@@ -2716,6 +2778,8 @@ DESCRIPTION is shown in the prompt."
   (setq-local embr--canvas-socket nil)
   (setq-local embr--canvas-recv-buf "")
   (setq-local embr--canvas-last-seq 0)
+  (setq-local embr--canvas-stream-id 0)
+  (setq-local embr--canvas-mutation-flag nil)
   (setq-local embr--canvas-stale-count 0)
   (setq-local embr--canvas-error-count 0)
   (setq-local embr--canvas-frame-count 0)

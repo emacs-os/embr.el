@@ -192,6 +192,7 @@ async def main():
     frame_socket_server = None
     frame_socket_writer = None
     frame_seq = 0
+    stream_id = 0
 
     data_dir = Path.home() / ".local" / "share" / "embr"
     _incognito_tmpdir = None
@@ -380,11 +381,12 @@ async def main():
 
     def send_frame_to_socket(jpg_bytes, width, height):
         """Write a length-prefixed JPEG frame packet to the canvas socket."""
-        nonlocal frame_seq
+        nonlocal frame_seq, stream_id
         if frame_socket_writer is None:
             return
         frame_seq += 1
-        header = struct.pack('<IIII', frame_seq, width, height, len(jpg_bytes))
+        header = struct.pack('<IIIII', frame_seq, width, height,
+                             len(jpg_bytes), stream_id)
         try:
             frame_socket_writer.write(header + jpg_bytes)
             # Schedule drain for backpressure (sync context, can't await).
@@ -418,6 +420,8 @@ async def main():
         nonlocal cdp_session, screencast_active, screencast_errors
         nonlocal _last_screencast_frame_ts
         nonlocal _pending_frame_data, _ack_ok_count, _ack_ok_logged
+        nonlocal stream_id
+        next_stream_id = stream_id + 1
         try:
             cdp_session = await page.context.new_cdp_session(page)
             await cdp_session.send("Page.enable")
@@ -436,6 +440,7 @@ async def main():
             _ack_ok_logged = 0
             _pending_frame_data = None
             _last_screencast_frame_ts = time.monotonic()
+            stream_id = next_stream_id
             start_title_refresh()
             print("embr: frame_source=screencast", file=sys.stderr)
         except Exception as e:
@@ -931,7 +936,8 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
             perf.source = active_source
             resp = {"ok": True, "frame_path": FRAME_PATH,
                     "frame_source": active_source,
-                    "render_backend": render_backend}
+                    "render_backend": render_backend,
+                    "stream_id": stream_id}
             if frame_socket_path:
                 resp["frame_socket_path"] = frame_socket_path
             return resp
@@ -1070,7 +1076,8 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
             if screencast_active:
                 await stop_screencast()
                 await start_screencast()
-            return {"ok": True, "width": new_w, "height": new_h}
+            return {"ok": True, "width": new_w, "height": new_h,
+                    "stream_id": stream_id}
 
         if cmd == "js":
             result = await page.evaluate(params["expr"])
@@ -1235,6 +1242,7 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
                 pass
             return {"ok": True, "tab_index": len(context.pages) - 1,
                     "url": page.url, "title": cached_title,
+                    "stream_id": stream_id,
                     "tabs": await _tab_list()}
 
         if cmd == "close-tab":
@@ -1260,6 +1268,7 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
                 pass
             return {"ok": True, "tab_index": len(context.pages) - 1,
                     "url": page.url, "title": cached_title,
+                    "stream_id": stream_id,
                     "tabs": await _tab_list()}
 
         if cmd == "list-tabs":
@@ -1280,6 +1289,7 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
                 except Exception:
                     pass
                 return {"ok": True, "url": page.url, "title": cached_title,
+                        "stream_id": stream_id,
                         "tabs": await _tab_list()}
             return {"error": f"tab index out of range: {idx}"}
 
