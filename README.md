@@ -24,10 +24,9 @@ Emacs is the display server. Headless Chromium is the renderer, using either [Cl
   :config
   (setq embr-browser-engine 'cloakbrowser
         embr-hover-rate 30
-        embr-default-width 1280
-        embr-default-height 720
-        embr-screen-width 1920
-        embr-screen-height 1080
+        embr-viewport-sizing 'dynamic
+        embr-screen-width (display-pixel-width)
+        embr-screen-height (display-pixel-height)
         embr-color-scheme 'dark
         embr-search-engine 'google
         embr-scroll-method 'instant
@@ -53,10 +52,9 @@ Emacs is the display server. Headless Chromium is the renderer, using either [Cl
   :config
   (setq embr-browser-engine 'cloakbrowser
         embr-hover-rate 30
-        embr-default-width 1280
-        embr-default-height 720
-        embr-screen-width 1920
-        embr-screen-height 1080
+        embr-viewport-sizing 'dynamic
+        embr-screen-width (display-pixel-width)
+        embr-screen-height (display-pixel-height)
         embr-color-scheme 'dark
         embr-search-engine 'google
         embr-scroll-method 'instant
@@ -124,7 +122,7 @@ All management is done from Emacs, no terminal needed. CloakBrowser setup builds
 |----------|------|---------|-------------|
 | `embr-browser-engine` | symbol | `'cloakbrowser` | `'cloakbrowser` uses CloakBrowser (anti-fingerprinting Chromium). `'chromium` uses vanilla Playwright Chromium. |
 | `embr-hover-rate` | integer | `30` | Mouse hover tracking rate in Hz. Higher values (e.g. 60) give lower-latency hover and can help with finicky buttons. Lower values (e.g. 20) reduce CDP traffic and may improve click reliability on slower machines. Setting this too high risks input lockups. Recommend 30 for `'default` backend, 60 for `'canvas`. |
-| `embr-viewport-sizing` | symbol | `'fixed` | `'fixed` uses `embr-default-width/height`. `'dynamic` derives viewport from the Emacs window and resizes automatically. Fixed is less fingerprintable. |
+| `embr-viewport-sizing` | symbol | `'dynamic` | `'dynamic` derives viewport from the Emacs window and resizes automatically. `'fixed` uses `embr-default-width/height` with hardcoded screen dimensions for a uniform fingerprint. |
 | `embr-default-width` | integer | `1280` | Viewport width in pixels (only effective when `embr-viewport-sizing` is `fixed`) |
 | `embr-default-height` | integer | `720` | Viewport height in pixels (only effective when `embr-viewport-sizing` is `fixed`) |
 | `embr-screen-width` | integer | `1920` | Screen width reported to websites (should be >= viewport) |

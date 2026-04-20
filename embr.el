@@ -75,13 +75,27 @@ alongside the .el in the builds dir, so this just works.")
   :type '(choice (const :tag "CloakBrowser" cloakbrowser)
                  (const :tag "Chromium (Playwright)" chromium)))
 
-(defcustom embr-viewport-sizing 'fixed
+(defcustom embr-viewport-sizing 'dynamic
   "How the browser viewport dimensions are determined.
-`fixed' uses `embr-default-width' and `embr-default-height'.
+
 `dynamic' derives viewport size from the Emacs window pixel
 dimensions and resizes automatically when the window changes.
-Fixed dimensions are less fingerprintable."
-  :type '(choice (const :tag "Fixed (default)" fixed)
+Pair with `display-pixel-width' and `display-pixel-height' for
+accurate screen reporting:
+
+  (setq embr-viewport-sizing \\='dynamic
+        embr-screen-width (display-pixel-width)
+        embr-screen-height (display-pixel-height))
+
+`fixed' uses `embr-default-width' and `embr-default-height' with
+hardcoded screen dimensions for a uniform browser fingerprint:
+
+  (setq embr-viewport-sizing \\='fixed
+        embr-default-width 1280
+        embr-default-height 720
+        embr-screen-width 1920
+        embr-screen-height 1080)"
+  :type '(choice (const :tag "Fixed" fixed)
                  (const :tag "Dynamic (match window)" dynamic)))
 
 (defcustom embr-default-width 1280
