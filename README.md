@@ -1,13 +1,6 @@
-## embr.el
-**Em**acs **Br**owser
+### Mon 20 Apr 2026 09:31:44 AM MDT - Dynamic viewport sizing - Important Update - 0.97
 
-Emacs is the display server. Headless Chromium is the renderer, using either [CloakBrowser](https://cloakbrowser.dev) (default, anti-fingerprinting, closed-source patches) or vanilla Playwright Chromium (fully open source). Frame transport uses CDP screencast. Emacs simulation keys pass through to the browser (similar to EXWM), and an optional `embr-vimium-mode` provides modal navigation for evil-mode users. Emacs canvas (optional) significantly improves rendering performance. If you build Emacs with the [canvas patch](https://github.com/minad/emacs-canvas-patch) (see [./canvasmacs](./canvasmacs)) and set `embr-render-backend` to `'canvas`, embr renders frames directly to a pixel buffer via a native C module. We are excited about and advocating for this patch to be [mainlined into Emacs](https://debbugs.gnu.org/cgi/bugreport.cgi?bug=80281#389) -- embr serves as a proof of concept that canvas enables real-time buffer rendering in Emacs.
-
-![embr screenshot](assets/screenshot-v2.png)
-
-### Dynamic viewport sizing
-
-embr now defaults to dynamic viewport sizing, where the browser viewport matches your Emacs window and resizes automatically. Update your `use-package` config to:
+embr now defaults to dynamic viewport sizing, where the browser viewport matches your Emacs window and resizes automatically. Update your `use-package` config in accordance with our latest examples, containing:
 
 ```elisp
 embr-viewport-sizing 'dynamic
@@ -15,7 +8,14 @@ embr-screen-width (display-pixel-width)
 embr-screen-height (display-pixel-height)
 ```
 
-This replaces the old `embr-default-width`, `embr-default-height`, `embr-screen-width`, and `embr-screen-height` hardcoded values. See `C-h v embr-viewport-sizing` for details on the trade-offs and how to restore the previous fixed behavior.
+This replaces the old `embr-default-width`, `embr-default-height`, `embr-screen-width`, and `embr-screen-height` hardcoded values. See `C-h v embr-viewport-sizing` for details on the trade-offs and how to restore the previous fixed-sizing behavior.
+
+## embr.el
+**Em**acs **Br**owser
+
+Emacs is the display server. Headless Chromium is the renderer, using either [CloakBrowser](https://cloakbrowser.dev) (default, anti-fingerprinting, closed-source patches) or vanilla Playwright Chromium (fully open source). Frame transport uses CDP screencast. Emacs simulation keys pass through to the browser (similar to EXWM), and an optional `embr-vimium-mode` provides modal navigation for evil-mode users. Emacs canvas (optional) significantly improves rendering performance. If you build Emacs with the [canvas patch](https://github.com/minad/emacs-canvas-patch) (see [./canvasmacs](./canvasmacs)) and set `embr-render-backend` to `'canvas`, embr renders frames directly to a pixel buffer via a native C module. We are excited about and advocating for this patch to be [mainlined into Emacs](https://debbugs.gnu.org/cgi/bugreport.cgi?bug=80281#389) -- embr serves as a proof of concept that canvas enables real-time buffer rendering in Emacs.
+
+![embr screenshot](assets/screenshot-v2.png)
 
 ## Prerequisites
 
