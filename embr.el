@@ -1115,7 +1115,13 @@ command round-trip."
   "Generic callback for command responses: report errors, update metadata."
   (when-let* ((err (alist-get 'error resp)))
     (message "embr error: %s" err))
-  (embr--update-metadata resp))
+  (embr--update-metadata resp)
+  ;; After a tab switch the daemon restarts screencast on the new page.
+  ;; Recreate the canvas with a fresh pixel buffer (same as a window
+  ;; resize) so stale content from the old tab is cleared immediately.
+  (when (and (alist-get 'tabs resp)
+             (equal embr--active-backend "canvas"))
+    (embr--canvas-resize embr--viewport-width embr--viewport-height)))
 
 ;; ── Commands ───────────────────────────────────────────────────────
 
@@ -3007,8 +3013,10 @@ Debounce by scheduling `embr--do-resize' after 0.3 seconds."
           (when size
             (let ((new-w (car size))
                   (new-h (cdr size)))
-              (unless (and (eql new-w embr--viewport-width)
-                           (eql new-h embr--viewport-height))
+              ;; Ignore sub-8px jitter (e.g. tab-bar redraws) to
+              ;; avoid spurious canvas recreations during tab switches.
+              (unless (and (< (abs (- new-w embr--viewport-width)) 8)
+                           (< (abs (- new-h embr--viewport-height)) 8))
                 (setq embr--viewport-width new-w
                       embr--viewport-height new-h)
                 ;; Recreate canvas BEFORE telling the daemon to

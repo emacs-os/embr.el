@@ -1060,7 +1060,13 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
         if cmd == "resize":
             new_w = max(200, int(params.get("width", 200)))
             new_h = max(200, int(params.get("height", 200)))
-            await page.set_viewport_size({"width": new_w, "height": new_h})
+            # Resize all pages so tab switches don't produce frames
+            # at the old viewport size (stride mismatch → corruption).
+            for p in context.pages:
+                try:
+                    await p.set_viewport_size({"width": new_w, "height": new_h})
+                except Exception:
+                    pass
             if screencast_active:
                 await stop_screencast()
                 await start_screencast()
@@ -1205,7 +1211,15 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
         if cmd == "new-tab":
             if screencast_active:
                 await stop_screencast()
+            # Capture current viewport before page changes.
+            vp = page.viewport_size
             new_page = await context.new_page()
+            # Match new tab to the current (possibly resized) viewport.
+            if vp:
+                try:
+                    await new_page.set_viewport_size(vp)
+                except Exception:
+                    pass
             url = params.get("url", "about:blank")
             if url != "about:blank" and not url.startswith(("http://", "https://", "file://", "chrome://")):
                 url = "https://" + url
