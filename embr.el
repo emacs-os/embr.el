@@ -75,12 +75,25 @@ alongside the .el in the builds dir, so this just works.")
   :type '(choice (const :tag "CloakBrowser" cloakbrowser)
                  (const :tag "Chromium (Playwright)" chromium)))
 
+(defcustom embr-viewport-sizing 'fixed
+  "How the browser viewport dimensions are determined.
+`fixed' uses `embr-default-width' and `embr-default-height'.
+`dynamic' derives viewport size from the Emacs window pixel
+dimensions and resizes automatically when the window changes.
+Fixed dimensions are less fingerprintable."
+  :type '(choice (const :tag "Fixed (default)" fixed)
+                 (const :tag "Dynamic (match window)" dynamic)))
+
 (defcustom embr-default-width 1280
-  "Default viewport width in pixels."
+  "Default viewport width in pixels.
+Only effective when `embr-viewport-sizing' is `fixed', or as a
+fallback when the window is not yet visible in `dynamic' mode."
   :type 'integer)
 
 (defcustom embr-default-height 720
-  "Default viewport height in pixels."
+  "Default viewport height in pixels.
+Only effective when `embr-viewport-sizing' is `fixed', or as a
+fallback when the window is not yet visible in `dynamic' mode."
   :type 'integer)
 
 (defcustom embr-screen-width 1920
@@ -627,10 +640,12 @@ Does not remove the Emacs package itself."
 (defvar embr--canvas-stale-count 0 "Number of stale/out-of-order frames dropped.")
 (defvar embr--canvas-error-count 0 "Consecutive canvas blit errors.")
 (defvar embr--canvas-frame-count 0 "Total frames blitted via canvas backend.")
+(defvar embr--canvas-resize-count 0 "Counter for generating unique canvas-ids on resize.")
 (defvar embr--default-frame-count 0 "Total frames rendered via default backend.")
 (defvar embr--zoom-level 1.0 "Current page zoom level.")
 (defvar embr--incognito-flag nil "Non-nil when this buffer is an incognito session.")
 (defvar embr--proxy-active nil "Non-nil when this session has proxy rules configured.")
+(defvar embr--resize-timer nil "Debounce timer for dynamic viewport resize.")
 
 (defun embr--url-proxied-p (url)
   "Return non-nil if URL matches a proxy rule in `embr-proxy-rules'."
@@ -985,6 +1000,27 @@ Connect to SOCKET-PATH and create the canvas image in the buffer."
   (setq embr--canvas-socket nil
         embr--canvas-image nil
         embr--canvas-recv-buf ""))
+
+(defun embr--canvas-resize (width height)
+  "Recreate the canvas image at WIDTH x HEIGHT.
+Allocate a fresh canvas-id so the C module creates a new pixel
+buffer at the correct size."
+  (cl-incf embr--canvas-resize-count)
+  (let ((canvas-id (intern (format "embr-canvas-%s-%d"
+                                   (buffer-name)
+                                   embr--canvas-resize-count))))
+    (setq embr--canvas-image
+          `(image :type canvas
+                  :canvas-id ,canvas-id
+                  :canvas-width ,width
+                  :canvas-height ,height)))
+  (setq embr--canvas-recv-buf ""
+        embr--canvas-last-seq 0)
+  (let ((inhibit-read-only t))
+    (erase-buffer)
+    (insert (propertize " " 'display embr--canvas-image))
+    (put-text-property (point-min) (point-max) 'pointer 'arrow)
+    (goto-char (point-min))))
 
 ;; ── Backend debug ─────────────────────────────────────────────────
 
@@ -2217,6 +2253,7 @@ If the mouse is not over a link, fall back to hint selection."
     (with-current-buffer embr--incognito-buffer
       (embr-mode)
       (setq embr--incognito-flag t)))
+  (switch-to-buffer embr--incognito-buffer)
   (with-current-buffer embr--incognito-buffer
     ;; Start daemon.
     (unless (and embr--process (process-live-p embr--process))
@@ -2270,9 +2307,12 @@ If the mouse is not over a link, fall back to hint selection."
            (alist-get 'frame_socket_path resp))
           (message "embr incognito: %s transport, %s backend"
                    (or (alist-get 'frame_source resp) "unknown")
-                   (embr--backend-name))))))
-  ;; Show buffer and navigate.
-  (switch-to-buffer embr--incognito-buffer)
+                   (embr--backend-name))
+          (when (eq embr-viewport-sizing 'dynamic)
+            (embr--resize-hook-install)
+            (let ((buf (current-buffer)))
+              (run-at-time 0.5 nil
+                           (lambda () (embr--do-resize buf)))))))))
   (embr-navigate url))
 
 ;; ── Key forwarding ─────────────────────────────────────────────────
@@ -2653,10 +2693,12 @@ DESCRIPTION is shown in the prompt."
   (setq-local embr--canvas-stale-count 0)
   (setq-local embr--canvas-error-count 0)
   (setq-local embr--canvas-frame-count 0)
+  (setq-local embr--canvas-resize-count 0)
   (setq-local embr--default-frame-count 0)
   (setq-local embr--zoom-level 1.0)
   (setq-local embr--incognito-flag nil)
   (setq-local embr--proxy-active nil)
+  (setq-local embr--resize-timer nil)
   (setq-local embr--muted-flag nil)
   (setq-local embr--tab-list nil)
   (setq-local buffer-read-only t)
@@ -2704,7 +2746,18 @@ DESCRIPTION is shown in the prompt."
     (when (and embr--process (process-live-p embr--process))
       (delete-process embr--process)))
   (embr--hover-stop)
-  (embr--backend-shutdown))
+  (embr--backend-shutdown)
+  (when embr--resize-timer
+    (cancel-timer embr--resize-timer)
+    (setq embr--resize-timer nil))
+  ;; Remove resize hook when no embr buffers remain.
+  (unless (or (and embr--normal-buffer
+                   (buffer-live-p embr--normal-buffer)
+                   (not (eq embr--normal-buffer (current-buffer))))
+              (and embr--incognito-buffer
+                   (buffer-live-p embr--incognito-buffer)
+                   (not (eq embr--incognito-buffer (current-buffer)))))
+    (embr--resize-hook-remove)))
 
 ;; ── Vimium minor mode ──────────────────────────────────────────────
 
@@ -2891,6 +2944,74 @@ In insert mode, keys pass through to the browser."
           (assq-delete-all 'embr-vimium-mode minor-mode-overriding-map-alist))
     (force-mode-line-update)))
 
+;; ── Dynamic viewport sizing ──────────────────────────────────────
+
+(defun embr--window-viewport-size (&optional window)
+  "Return viewport size as (WIDTH . HEIGHT) from WINDOW pixel dimensions.
+Return nil if the window is not live or has no pixel size."
+  (let ((win (or window (get-buffer-window (current-buffer)))))
+    (when (and win (window-live-p win))
+      (let ((w (window-body-width win t))
+            (h (window-body-height win t)))
+        (when (and w h (> w 0) (> h 0))
+          (cons (max 200 w) (max 200 h)))))))
+
+(defun embr--resize-hook-install ()
+  "Install the window size change hook for dynamic viewport sizing."
+  (add-hook 'window-size-change-functions #'embr--on-window-resize))
+
+(defun embr--resize-hook-remove ()
+  "Remove the window size change hook for dynamic viewport sizing."
+  (remove-hook 'window-size-change-functions #'embr--on-window-resize))
+
+(defun embr--on-window-resize (frame)
+  "Handle FRAME resize for dynamic viewport sizing.
+Debounce by scheduling `embr--do-resize' after 0.3 seconds."
+  (dolist (buf (list embr--normal-buffer embr--incognito-buffer))
+    (when (and buf (buffer-live-p buf))
+      (with-current-buffer buf
+        (when (and embr--process (process-live-p embr--process)
+                   (eq embr-viewport-sizing 'dynamic))
+          (let ((win (get-buffer-window buf frame)))
+            (when win
+              (when embr--resize-timer
+                (cancel-timer embr--resize-timer))
+              (let ((target-buf buf))
+                (setq embr--resize-timer
+                      (run-at-time
+                       0.3 nil
+                       (lambda ()
+                         (embr--do-resize target-buf))))))))))))
+
+(defun embr--do-resize (buf)
+  "Execute the viewport resize for BUF after debounce."
+  (when (buffer-live-p buf)
+    (with-current-buffer buf
+      (setq embr--resize-timer nil)
+      (when (and embr--process (process-live-p embr--process))
+        (let ((size (embr--window-viewport-size)))
+          (when size
+            (let ((new-w (car size))
+                  (new-h (cdr size)))
+              (unless (and (eql new-w embr--viewport-width)
+                           (eql new-h embr--viewport-height))
+                (setq embr--viewport-width new-w
+                      embr--viewport-height new-h)
+                ;; Recreate canvas BEFORE telling the daemon to
+                ;; resize, so the new (larger) pixel buffer is ready
+                ;; before larger frames arrive.
+                (when (equal embr--active-backend "canvas")
+                  (embr--canvas-resize new-w new-h))
+                ;; Fire-and-forget -- bypass embr--send to avoid
+                ;; clobbering the single callback slot.
+                (process-send-string
+                 embr--process
+                 (concat (json-serialize
+                          `((cmd . "resize")
+                            (width . ,new-w)
+                            (height . ,new-h)))
+                         "\n"))))))))))
+
 ;; ── Entry point ────────────────────────────────────────────────────
 
 (defun embr--build-init-params ()
@@ -2947,9 +3068,13 @@ Lisp with a URL argument, navigate to that URL."
     (setq embr--normal-buffer (generate-new-buffer "*embr*"))
     (with-current-buffer embr--normal-buffer
       (embr-mode)))
+  (switch-to-buffer embr--normal-buffer)
   (with-current-buffer embr--normal-buffer
     ;; Start daemon if needed.
     (unless (and embr--process (process-live-p embr--process))
+      ;; Always init at safe default size.  In dynamic mode, a
+      ;; deferred timer resizes to the window dimensions after the
+      ;; backend is fully up (avoids a canvas init race at large sizes).
       (setq embr--viewport-width (or embr--viewport-width embr-default-width)
             embr--viewport-height (or embr--viewport-height embr-default-height))
       (embr--start-daemon)
@@ -2988,11 +3113,15 @@ Lisp with a URL argument, navigate to that URL."
            (alist-get 'frame_socket_path resp))
           (message "embr: %s transport, %s backend"
                    (or (alist-get 'frame_source resp) "unknown")
-                   (embr--backend-name)))))
-    ;; Daemon already running — open URL in a new tab.
+                   (embr--backend-name))
+          (when (eq embr-viewport-sizing 'dynamic)
+            (embr--resize-hook-install)
+            (let ((buf (current-buffer)))
+              (run-at-time 0.5 nil
+                           (lambda () (embr--do-resize buf))))))))
+    ;; Daemon already running -- open URL in a new tab.
     (when url
-      (embr--send-sync `((cmd . "new-tab") (url . ,url)))))
-  (switch-to-buffer embr--normal-buffer))
+      (embr--send-sync `((cmd . "new-tab") (url . ,url))))))
 
 (provide 'embr)
 

@@ -124,8 +124,9 @@ All management is done from Emacs, no terminal needed. CloakBrowser setup builds
 |----------|------|---------|-------------|
 | `embr-browser-engine` | symbol | `'cloakbrowser` | `'cloakbrowser` uses CloakBrowser (anti-fingerprinting Chromium). `'chromium` uses vanilla Playwright Chromium. |
 | `embr-hover-rate` | integer | `30` | Mouse hover tracking rate in Hz. Higher values (e.g. 60) give lower-latency hover and can help with finicky buttons. Lower values (e.g. 20) reduce CDP traffic and may improve click reliability on slower machines. Setting this too high risks input lockups. Recommend 30 for `'default` backend, 60 for `'canvas`. |
-| `embr-default-width` | integer | `1280` | Viewport width in pixels |
-| `embr-default-height` | integer | `720` | Viewport height in pixels |
+| `embr-viewport-sizing` | symbol | `'fixed` | `'fixed` uses `embr-default-width/height`. `'dynamic` derives viewport from the Emacs window and resizes automatically. Fixed is less fingerprintable. |
+| `embr-default-width` | integer | `1280` | Viewport width in pixels (only effective when `embr-viewport-sizing` is `fixed`) |
+| `embr-default-height` | integer | `720` | Viewport height in pixels (only effective when `embr-viewport-sizing` is `fixed`) |
 | `embr-screen-width` | integer | `1920` | Screen width reported to websites (should be >= viewport) |
 | `embr-screen-height` | integer | `1080` | Screen height reported to websites (should be >= viewport) |
 | `embr-color-scheme` | symbol/nil | `'dark` | `'dark`, `'light`, or `nil` to let the browser choose. Controls `prefers-color-scheme`. |

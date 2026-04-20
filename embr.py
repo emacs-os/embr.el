@@ -1057,6 +1057,15 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
                 pass
             return {"ok": True, "url": page.url}
 
+        if cmd == "resize":
+            new_w = max(200, int(params.get("width", 200)))
+            new_h = max(200, int(params.get("height", 200)))
+            await page.set_viewport_size({"width": new_w, "height": new_h})
+            if screencast_active:
+                await stop_screencast()
+                await start_screencast()
+            return {"ok": True, "width": new_w, "height": new_h}
+
         if cmd == "js":
             result = await page.evaluate(params["expr"])
             return {"ok": True, "result": result}
