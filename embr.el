@@ -947,8 +947,8 @@ via a process property so buffer-local vars resolve correctly."
               (if (< (length embr--canvas-recv-buf) total)
                   (setq done t)
                 (let ((jpeg-data (substring embr--canvas-recv-buf 16 total))
-                      (width (embr--read-u32 hdr 4))
-                      (height (embr--read-u32 hdr 8)))
+                      (_width (embr--read-u32 hdr 4))
+                      (_height (embr--read-u32 hdr 8)))
                   (setq embr--canvas-recv-buf
                         (substring embr--canvas-recv-buf total))
                   ;; Drop stale or out-of-order packets.  Handle uint32
@@ -960,8 +960,14 @@ via a process property so buffer-local vars resolve correctly."
                     (when embr--canvas-image
                       (condition-case err
                           (progn
+                            ;; Pass canvas buffer dimensions (from the
+                            ;; image spec), not frame dimensions -- a
+                            ;; mismatch causes an out-of-bounds write.
                             (embr-canvas-blit-jpeg
-                             embr--canvas-image jpeg-data width height seq)
+                             embr--canvas-image jpeg-data
+                             (plist-get (cdr embr--canvas-image) :canvas-width)
+                             (plist-get (cdr embr--canvas-image) :canvas-height)
+                             seq)
                             (cl-incf embr--canvas-frame-count)
                             (setq embr--canvas-error-count 0))
                         (error
