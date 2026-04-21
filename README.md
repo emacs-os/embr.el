@@ -305,7 +305,7 @@ Audio playback works.
 
 PDF viewing works.
 
-Mic, camera, and screen sharing do not work.
+Mic, camera, and screen sharing work (with caveats).
 
 ### How do I use Discord voice/video?
 
