@@ -307,6 +307,18 @@ PDF viewing works.
 
 Mic, camera, and screen sharing do not work.
 
+### How do I use Discord voice/video?
+
+Discord voice and video require `embr-display-method` set to `'headed` and two one-time browser settings:
+
+1. **Fix WebRTC UDP policy.** CloakBrowser ships with UDP disabled by default, which prevents WebRTC from connecting. Visit `chrome://flags/#webrtc-ip-handling-policy`, set it to **Default**, and relaunch.
+
+2. **Grant microphone permission.** On your first visit to Discord, the browser will prompt for microphone access. Click **Allow**.
+
+After the initial headed setup, voice chat works in headless mode too. You only need `'headed` for the one-time audio permission grant.
+
+Screen sharing also requires `'headed` mode so you can interact with the PipeWire dialog to select which screen or application to share, but there is no straightforward way to use it without 'headed. Presumably video cameras work too from `'headed` mode too, for whatever that is worth.
+
 ### How do I search?
 
 Any non-URL input in `C-c o` (Open URL) or passed as a string argument to `embr-browse` is treated as a search query. The default engine is Google. Set `embr-search-engine` to `'google`, `'brave`, `'duckduckgo`, `'bing`, `'yandex`, `'baidu`, or a custom URL string with `%s` for the query (e.g. `"https://search.brave.com/search?q=%s"`).
