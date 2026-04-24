@@ -2426,6 +2426,7 @@ If the mouse is not over a link, fall back to hint selection."
     ("<backspace>" "Backspace")
     ("<return>" "Enter")
     ("<tab>" "Tab")
+    ("<backtab>" "Shift+Tab")
     ("<delete>" "Delete")
     ("<home>" "Home")
     ("<end>" "End")
@@ -2705,7 +2706,7 @@ DESCRIPTION is shown in the prompt."
     (define-key map (kbd "&") #'embr-play-external)
     (define-key map (kbd "<f5>") #'embr-refresh)
     ;; Special keys → forward to browser.
-    (dolist (key '("<return>" "<backspace>" "<tab>" "<delete>"
+    (dolist (key '("<return>" "<backspace>" "<tab>" "<backtab>" "<delete>"
                    "<home>" "<end>" "<up>" "<down>" "<left>" "<right>"
                    "<prior>" "<next>" "<escape>"))
       (define-key map (kbd key) #'embr-self-insert))
