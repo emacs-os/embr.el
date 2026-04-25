@@ -639,6 +639,22 @@ Does not remove the Emacs package itself."
 (defvar embr--frame-path nil "Path to the JPEG frame file written by the daemon.")
 (defvar embr--url-history nil "History of visited URLs for completion.")
 (defvar embr--hints nil "Current hint labels alist from the daemon.")
+(defconst embr--hint-initial-read-delay 0.1
+  "Seconds to wait before first hint prompt for overlay visibility.")
+(defconst embr--hint-retry-delay 0.05
+  "Seconds to wait before re-requesting hints after invalid state.")
+(defconst embr--hint-max-retries 1
+  "Maximum number of automatic hint re-request attempts.")
+(defvar embr--hint-session-id 0
+  "Monotonic identifier for invalidating stale hint timers.")
+(defvar embr--hint-read-timer nil
+  "Timer pending a hint read or retry for the current session.")
+(defvar embr--hint-retry-count 0
+  "Number of automatic retries attempted in the current hint session.")
+(defvar embr--hint-action nil
+  "Current hint action kind, one of `follow', `download', or `copy'.")
+(defvar embr--hint-session-hints nil
+  "Hint list captured for the active hint session.")
 (defvar embr--hover-timer nil "Timer for mouse hover tracking.")
 (defvar embr--hover-last-x nil "Last hover X coordinate sent.")
 (defvar embr--hover-last-y nil "Last hover Y coordinate sent.")
@@ -772,6 +788,7 @@ Respects `embr-display-method' for display modes."
       (message "embr: daemon exited: %s" (string-trim event))
       (when (buffer-live-p buf)
         (with-current-buffer buf
+          (embr--hint-abort-session)
           (embr--hover-stop)
           (embr--backend-shutdown)
           (setq embr--process nil))))))
@@ -784,6 +801,11 @@ Respects `embr-display-method' for display modes."
   (setq embr--pending-frame nil)
   (setq embr--callback callback)
   (process-send-string embr--process (concat (json-serialize msg) "\n")))
+
+(defun embr--send-no-callback (msg)
+  "Send MSG as JSON without touching the callback slot."
+  (when (and embr--process (process-live-p embr--process))
+    (process-send-string embr--process (concat (json-serialize msg) "\n"))))
 
 (defun embr--send-sync (msg)
   "Send MSG and wait synchronously for the response.  Returns the parsed alist."
@@ -1396,6 +1418,7 @@ Return the number of tabs restored, or nil."
 (defun embr-quit ()
   "Kill the daemon and close the buffer."
   (interactive)
+  (embr--hint-abort-session)
   (embr--save-session)
   (when (and embr--process (process-live-p embr--process))
     (embr--send '((cmd . "quit")))
@@ -1606,40 +1629,176 @@ BUF is the embr buffer that owns this timer."
 
 ;; ── Link hints ─────────────────────────────────────────────────────
 
-(defun embr-follow-hint ()
-  "Show link hints on all clickable elements, then follow the chosen one."
-  (interactive)
+(defun embr--hint-action-prompt (action)
+  "Return minibuffer prompt for hint ACTION."
+  (pcase action
+    ('follow "Hint: ")
+    ('download "Download hint: ")
+    ('copy "Copy link hint: ")
+    (_ "Hint: ")))
+
+(defun embr--hint-empty-message (action)
+  "Return message shown when no hints exist for ACTION."
+  (pcase action
+    ('follow "embr: no clickable elements found")
+    (_ "embr: no links found")))
+
+(defun embr--hint-descriptions (hints)
+  "Build completion descriptions from HINTS."
+  (mapcar (lambda (h)
+            (format "%s: %s"
+                    (alist-get 'tag h)
+                    (or (alist-get 'text h) "")))
+          hints))
+
+(defun embr--hint-valid-list-p (hints)
+  "Return t if HINTS is non-empty and every hint has a tag string."
+  (and (listp hints)
+       hints
+       (cl-every (lambda (h)
+                   (let ((tag (alist-get 'tag h)))
+                     (and (stringp tag)
+                          (not (string-empty-p tag)))))
+                 hints)))
+
+(defun embr--hint-cancel-timer ()
+  "Cancel the current hint timer, if any."
+  (when embr--hint-read-timer
+    (cancel-timer embr--hint-read-timer)
+    (setq embr--hint-read-timer nil)))
+
+(defun embr--hint-abort-session ()
+  "Cancel and invalidate the active hint session."
+  (embr--hint-cancel-timer)
+  (setq embr--hint-session-id (1+ embr--hint-session-id)
+        embr--hint-retry-count 0
+        embr--hint-action nil
+        embr--hint-session-hints nil
+        embr--hints nil))
+
+(defun embr--hint-current-session-p (session-id)
+  "Return t if SESSION-ID matches the current hint session."
+  (= session-id embr--hint-session-id))
+
+(defun embr--hint-schedule (session-id delay function)
+  "Run FUNCTION for SESSION-ID after DELAY seconds.
+FUNCTION is called in the owning embr buffer."
+  (embr--hint-cancel-timer)
+  (let ((buf (current-buffer)))
+    (setq embr--hint-read-timer
+          (run-at-time
+           delay nil
+           (lambda ()
+             (when (buffer-live-p buf)
+               (with-current-buffer buf
+                 (when (embr--hint-current-session-p session-id)
+                   (setq embr--hint-read-timer nil)
+                   (funcall function session-id)))))))))
+
+(defun embr--hint-finish-session ()
+  "Clear hint overlays and reset hint session state."
+  (embr--send-no-callback '((cmd . "hints-clear")))
+  (embr--hint-abort-session))
+
+(defun embr--hint-find-choice (hints chosen)
+  "Return selected hint from HINTS for completion string CHOSEN."
+  (when (and chosen (string-match "\\`\\([^:]+\\):" chosen))
+    (let ((tag (match-string 1 chosen)))
+      (seq-find (lambda (h)
+                  (string= (alist-get 'tag h) tag))
+                hints))))
+
+(defun embr--hint-apply-action (action hint)
+  "Execute hint ACTION for HINT."
+  (pcase action
+    ('follow
+     (embr--send `((cmd . "click")
+                   (x . ,(alist-get 'x hint))
+                   (y . ,(alist-get 'y hint)))
+                 #'embr--action-callback))
+    ('download
+     (let ((href (alist-get 'href hint)))
+       (if href
+           (embr--download-url href)
+         (message "embr: selected element is not a link"))))
+    ('copy
+     (let ((href (alist-get 'href hint)))
+       (if href
+           (progn
+             (kill-new href)
+             (message "Copied: %s" href))
+         (message "embr: selected element is not a link"))))))
+
+(defun embr--hint-retry-refresh (session-id)
+  "Re-request hints for SESSION-ID and try reading again."
+  (when (embr--hint-current-session-p session-id)
+    (let ((resp (embr--send-sync '((cmd . "hints")))))
+      (if-let* ((err (alist-get 'error resp)))
+          (progn
+            (message "embr error: %s" err)
+            (embr--hint-finish-session))
+        (let ((hints (alist-get 'hints resp)))
+          (setq embr--hints hints
+                embr--hint-session-hints hints)
+          (embr--hint-read-session session-id))))))
+
+(defun embr--hint-maybe-retry (session-id)
+  "Retry hint collection for SESSION-ID when session state is invalid."
+  (if (< embr--hint-retry-count embr--hint-max-retries)
+      (progn
+        (setq embr--hint-retry-count (1+ embr--hint-retry-count))
+        (embr--hint-schedule session-id embr--hint-retry-delay
+                             #'embr--hint-retry-refresh))
+    (message "embr: hint retry failed; please try again")
+    (embr--hint-finish-session)))
+
+(defun embr--hint-read-session (session-id)
+  "Prompt for and execute a hint selection for SESSION-ID."
+  (when (embr--hint-current-session-p session-id)
+    (let ((hints embr--hint-session-hints))
+      (if (embr--hint-valid-list-p hints)
+          (let ((action embr--hint-action)
+                (chosen nil)
+                (hint nil))
+            (unwind-protect
+                (progn
+                  (setq chosen (condition-case nil
+                                   (completing-read (embr--hint-action-prompt action)
+                                                    (embr--hint-descriptions hints)
+                                                    nil t)
+                                 (quit nil)))
+                  (setq hint (embr--hint-find-choice hints chosen)))
+              (embr--hint-finish-session))
+            (when hint
+              (embr--hint-apply-action action hint)))
+        (embr--hint-maybe-retry session-id)))))
+
+(defun embr--hint-start-session (action hints)
+  "Start a new hint ACTION session with HINTS."
+  (embr--hint-cancel-timer)
+  (setq embr--hint-session-id (1+ embr--hint-session-id)
+        embr--hint-retry-count 0
+        embr--hint-action action
+        embr--hint-session-hints hints
+        embr--hints hints)
+  ;; Brief pause for the hint overlay frame to arrive.
+  (embr--hint-schedule embr--hint-session-id embr--hint-initial-read-delay
+                       #'embr--hint-read-session))
+
+(defun embr--hint-start (action)
+  "Request hints and begin hint ACTION selection."
   (let ((resp (embr--send-sync '((cmd . "hints")))))
     (if-let* ((err (alist-get 'error resp)))
         (message "embr error: %s" err)
-      (let* ((hints (alist-get 'hints resp))
-             (tags (mapcar (lambda (h) (alist-get 'tag h)) hints)))
-        (if (null tags)
-            (message "embr: no clickable elements found")
-          (setq embr--hints hints)
-          ;; Brief pause for the hint overlay frame to arrive.
-          (run-at-time 0.1 nil #'embr--read-hint))))))
+      (let ((hints (alist-get 'hints resp)))
+        (if (embr--hint-valid-list-p hints)
+            (embr--hint-start-session action hints)
+          (message "%s" (embr--hint-empty-message action)))))))
 
-(defun embr--read-hint ()
-  "Read a hint tag from the user and click it."
-  (let* ((descriptions (mapcar (lambda (h)
-                                 (format "%s: %s" (alist-get 'tag h)
-                                         (alist-get 'text h)))
-                               embr--hints))
-         (chosen (condition-case nil
-                     (completing-read "Hint: " descriptions nil t)
-                   (quit nil))))
-    ;; Always clear hints, whether user picked one or cancelled.
-    (embr--send '((cmd . "hints-clear")) nil)
-    (when (and chosen (string-match "\\`\\([^:]+\\):" chosen))
-      (let* ((tag (match-string 1 chosen))
-             (hint (seq-find (lambda (h) (string= (alist-get 'tag h) tag))
-                             embr--hints)))
-        (when hint
-          (embr--send `((cmd . "click")
-                               (x . ,(alist-get 'x hint))
-                               (y . ,(alist-get 'y hint)))
-                             #'embr--action-callback))))))
+(defun embr-follow-hint ()
+  "Show link hints on all clickable elements, then follow the chosen one."
+  (interactive)
+  (embr--hint-start 'follow))
 
 ;; ── Text extraction ────────────────────────────────────────────────
 
@@ -1749,34 +1908,7 @@ With prefix argument, prompt for a URL instead."
 
 (defun embr--download-via-hints ()
   "Show link hints, then download the chosen link."
-  (let ((resp (embr--send-sync '((cmd . "hints")))))
-    (if-let* ((err (alist-get 'error resp)))
-        (message "embr error: %s" err)
-      (let* ((hints (alist-get 'hints resp)))
-        (if (null hints)
-            (message "embr: no links found")
-          (setq embr--hints hints)
-          (run-at-time 0.1 nil #'embr--read-download-hint))))))
-
-(defun embr--read-download-hint ()
-  "Read a hint tag from the user and download its link."
-  (let* ((descriptions (mapcar (lambda (h)
-                                 (format "%s: %s" (alist-get 'tag h)
-                                         (alist-get 'text h)))
-                               embr--hints))
-         (chosen (condition-case nil
-                     (completing-read "Download hint: " descriptions nil t)
-                   (quit nil))))
-    (embr--send '((cmd . "hints-clear")) nil)
-    (when (and chosen (string-match "\\`\\([^:]+\\):" chosen))
-      (let* ((tag (match-string 1 chosen))
-             (hint (seq-find (lambda (h) (string= (alist-get 'tag h) tag))
-                             embr--hints)))
-        (when hint
-          (let ((href (alist-get 'href hint)))
-            (if href
-                (embr--download-url href)
-              (message "embr: selected element is not a link"))))))))
+  (embr--hint-start 'download))
 
 (defun embr-copy-url ()
   "Copy the current page URL to the kill ring."
@@ -2162,36 +2294,7 @@ If the mouse is not over a link, fall back to hint selection."
 
 (defun embr--copy-link-via-hints ()
   "Show link hints, then copy the chosen link to the kill ring."
-  (let ((resp (embr--send-sync '((cmd . "hints")))))
-    (if-let* ((err (alist-get 'error resp)))
-        (message "embr error: %s" err)
-      (let* ((hints (alist-get 'hints resp)))
-        (if (null hints)
-            (message "embr: no links found")
-          (setq embr--hints hints)
-          (run-at-time 0.1 nil #'embr--read-copy-link-hint))))))
-
-(defun embr--read-copy-link-hint ()
-  "Read a hint tag from the user and copy its link."
-  (let* ((descriptions (mapcar (lambda (h)
-                                 (format "%s: %s" (alist-get 'tag h)
-                                         (alist-get 'text h)))
-                               embr--hints))
-         (chosen (condition-case nil
-                     (completing-read "Copy link hint: " descriptions nil t)
-                   (quit nil))))
-    (embr--send '((cmd . "hints-clear")) nil)
-    (when (and chosen (string-match "\\`\\([^:]+\\):" chosen))
-      (let* ((tag (match-string 1 chosen))
-             (hint (seq-find (lambda (h) (string= (alist-get 'tag h) tag))
-                             embr--hints)))
-        (when hint
-          (let ((href (alist-get 'href hint)))
-            (if href
-                (progn
-                  (kill-new href)
-                  (message "Copied: %s" href))
-              (message "embr: selected element is not a link"))))))))
+  (embr--hint-start 'copy))
 
 ;; ── Print to PDF ─────────────────────────────────────────────────
 
@@ -2767,6 +2870,11 @@ DESCRIPTION is shown in the prompt."
   (setq-local embr--viewport-height nil)
   (setq-local embr--frame-path nil)
   (setq-local embr--hints nil)
+  (setq-local embr--hint-session-id 0)
+  (setq-local embr--hint-read-timer nil)
+  (setq-local embr--hint-retry-count 0)
+  (setq-local embr--hint-action nil)
+  (setq-local embr--hint-session-hints nil)
   (setq-local embr--hover-timer nil)
   (setq-local embr--hover-last-x nil)
   (setq-local embr--hover-last-y nil)
@@ -2828,6 +2936,7 @@ DESCRIPTION is shown in the prompt."
 
 (defun embr--kill-buffer-cleanup ()
   "Shut down the daemon when the buffer is killed by any means."
+  (embr--hint-abort-session)
   (embr--save-session)
   (when (and embr--process (process-live-p embr--process))
     (process-send-string
