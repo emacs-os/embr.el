@@ -1500,6 +1500,83 @@ Better compatibility with iframe widgets like Cloudflare Turnstile."
           (embr--send `((cmd . "click") (x . ,start-x) (y . ,start-y))
                              #'embr--action-callback))))))
 
+(defvar embr--context-menu-coords nil
+  "Dynamic click coordinates used by context-menu actions.")
+
+(defun embr--context-menu-download ()
+  "Download the link at the context-menu click coordinates."
+  (interactive)
+  (if (null embr--context-menu-coords)
+      (embr--download-via-hints)
+    (embr--send `((cmd . "link-at-point")
+                  (x . ,(car embr--context-menu-coords))
+                  (y . ,(cdr embr--context-menu-coords)))
+                (lambda (resp)
+                  (let ((href (alist-get 'href resp)))
+                    (if href
+                        (embr--download-url href)
+                      (embr--download-via-hints)))))))
+
+(defun embr--context-menu-open-url ()
+  "Open link at the context-menu click, or prompt for a URL."
+  (interactive)
+  (if (null embr--context-menu-coords)
+      (call-interactively #'embr-navigate)
+    (let* ((resp (embr--send-sync `((cmd . "link-at-point")
+                                    (x . ,(car embr--context-menu-coords))
+                                    (y . ,(cdr embr--context-menu-coords)))))
+           (err (alist-get 'error resp))
+           (href (alist-get 'href resp)))
+      (if err
+          (progn
+            (message "embr: %s" err)
+            (call-interactively #'embr-navigate))
+        (if href
+            (embr-navigate href)
+          (call-interactively #'embr-navigate))))))
+
+(defvar embr--context-menu-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [open-url] '(menu-item "Open URL" embr--context-menu-open-url))
+    (define-key-after map [reload] '(menu-item "Reload" embr-refresh) 'open-url)
+    (define-key-after map [back] '(menu-item "Back" embr-back) 'reload)
+    (define-key-after map [forward] '(menu-item "Forward" embr-forward) 'back)
+    (define-key-after map [download] '(menu-item "Download" embr--context-menu-download) 'forward)
+    (define-key-after map [download-url] '(menu-item "Download URL" embr-download-url) 'download)
+    (define-key-after map [print-pdf] '(menu-item "Print PDF" embr-print-pdf) 'download-url)
+    (define-key-after map [screenshot] '(menu-item "Screenshot" embr-screenshot) 'print-pdf)
+    (define-key-after map [reader] '(menu-item "Reader" embr-reader) 'screenshot)
+    (define-key-after map [view-text] '(menu-item "View text" embr-view-text) 'reader)
+    (define-key-after map [open-in-eww] '(menu-item "Open in eww" embr-open-in-eww) 'view-text)
+    (define-key-after map [view-source] '(menu-item "View source" embr-view-source) 'open-in-eww)
+    (define-key-after map [page-info] '(menu-item "Page info" embr-page-info) 'view-source)
+    map)
+  "Context menu keymap for mouse actions in `embr-mode'.")
+
+(defun embr--mouse-context-menu (event)
+  "Show mouse context menu at EVENT."
+  (interactive "e")
+  (let* ((posn (event-start event))
+         (embr--context-menu-coords (posn-object-x-y posn)))
+    (popup-menu embr--context-menu-map event)))
+
+(defun embr--mouse-open-link-new-tab (event)
+  "Open the link at EVENT in a new tab."
+  (interactive "e")
+  (let* ((posn (event-start event))
+         (xy (posn-object-x-y posn)))
+    (if (null xy)
+        (message "embr: no link under pointer")
+      (embr--send `((cmd . "link-at-point")
+                    (x . ,(car xy))
+                    (y . ,(cdr xy)))
+                  (lambda (resp)
+                    (if-let* ((err (alist-get 'error resp)))
+                        (message "embr: %s" err)
+                      (if-let* ((href (alist-get 'href resp)))
+                          (embr-new-tab href)
+                        (message "embr: no link under pointer"))))))))
+
 
 (defun embr--scroll-delta ()
   "Return the scroll delta in pixels."
@@ -1919,6 +1996,13 @@ With prefix argument, prompt for a URL instead."
     (kill-new url)
     (message "Copied: %s" url)))
 
+(defun embr--header-line-click (event)
+  "Copy current URL and prompt for navigation from EVENT."
+  (interactive "e")
+  (ignore event)
+  (embr-copy-url)
+  (call-interactively #'embr-navigate))
+
 ;; ── Resolution toggle ─────────────────────────────────────────────
 
 
@@ -2000,6 +2084,13 @@ With prefix argument, prompt for a URL instead."
     (define-key map [tab-line mouse-1] #'embr--tab-bar-close)
     map)
   "Keymap for tab close buttons in the tab bar.")
+
+(defvar embr--header-line-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [header-line mouse-1] #'embr--header-line-click)
+    (define-key map [mouse-1] #'embr--header-line-click)
+    map)
+  "Keymap for clickable header-line actions.")
 
 (defun embr--truncate-tab-title (title max-len)
   "Truncate TITLE to MAX-LEN chars, adding ellipsis if needed."
@@ -2841,6 +2932,10 @@ DESCRIPTION is shown in the prompt."
 
     ;; Mouse → forward to browser.
     (define-key map [down-mouse-1] #'embr-mouse-handler)
+    (define-key map [down-mouse-2] #'embr--mouse-open-link-new-tab)
+    (define-key map [down-mouse-3] #'embr--mouse-context-menu)
+    (define-key map [mouse-2] #'ignore)
+    (define-key map [mouse-3] #'ignore)
 
     (define-key map [wheel-down] #'embr-scroll-down)
     (define-key map [wheel-up] #'embr-scroll-up)
@@ -2909,26 +3004,31 @@ DESCRIPTION is shown in the prompt."
               '(:eval (let ((url (if (> (length embr--current-url) 40)
                                      (concat (substring embr--current-url 0 40) "...")
                                    embr--current-url)))
-                        (concat
-                         (when (bound-and-true-p embr-vimium-mode)
-                           (if embr-vimium--insert-mode
-                               (propertize " INSERT " 'face '(:background "#22863a" :foreground "white"))
-                             (propertize " NORMAL " 'face '(:background "#0366d6" :foreground "white"))))
-                         (when embr--muted-flag
-                           (propertize " MUTED " 'face '(:background "red" :foreground "white")))
-                         (when embr--incognito-flag
-                           (propertize " INCOGNITO " 'face '(:background "purple" :foreground "white")))
-                         (when (embr--url-proxied-p embr--current-url)
-                           (propertize " PROXY " 'face '(:background "red" :foreground "white")))
-                         " "
-                         (propertize url 'face 'shadow)
-                         (unless embr-tab-bar
-                           (unless (string-empty-p embr--current-title)
-                             (concat
-                              (propertize " — " 'face 'shadow)
-                              (propertize embr--current-title 'face 'bold))))
-                         (unless (= embr--zoom-level 1.0)
-                           (format " [%d%%]" (round (* embr--zoom-level 100))))))))
+                        (propertize
+                         (concat
+                          (when (bound-and-true-p embr-vimium-mode)
+                            (if embr-vimium--insert-mode
+                                (propertize " INSERT " 'face '(:background "#22863a" :foreground "white"))
+                              (propertize " NORMAL " 'face '(:background "#0366d6" :foreground "white"))))
+                          (when embr--muted-flag
+                            (propertize " MUTED " 'face '(:background "red" :foreground "white")))
+                          (when embr--incognito-flag
+                            (propertize " INCOGNITO " 'face '(:background "purple" :foreground "white")))
+                          (when (embr--url-proxied-p embr--current-url)
+                            (propertize " PROXY " 'face '(:background "red" :foreground "white")))
+                          " "
+                          (propertize url 'face 'shadow)
+                          (unless embr-tab-bar
+                            (unless (string-empty-p embr--current-title)
+                              (concat
+                               (propertize " — " 'face 'shadow)
+                               (propertize embr--current-title 'face 'bold))))
+                          (unless (= embr--zoom-level 1.0)
+                            (format " [%d%%]" (round (* embr--zoom-level 100)))))
+                         'mouse-face 'mode-line-highlight
+                         'keymap embr--header-line-map
+                         'pointer 'hand
+                         'help-echo "mouse-1: Copy URL and open URL/Search prompt"))))
   (when embr-tab-bar
     (setq-local tab-line-format '(:eval (embr--render-tab-bar))))
   (add-hook 'pre-command-hook #'embr--maybe-end-search nil t)
