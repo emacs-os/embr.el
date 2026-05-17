@@ -1,15 +1,3 @@
-### Mon 20 Apr 2026 09:31:44 AM MDT - Dynamic viewport sizing - Important Update - 0.97
-
-embr now defaults to dynamic viewport sizing, where the browser viewport matches your Emacs window and resizes automatically. Update your `use-package` config in accordance with our latest examples, containing:
-
-```elisp
-embr-viewport-sizing 'dynamic
-embr-screen-width (display-pixel-width)
-embr-screen-height (display-pixel-height)
-```
-
-This replaces the old `embr-default-width`, `embr-default-height`, `embr-screen-width`, and `embr-screen-height` hardcoded values. See `C-h v embr-viewport-sizing` for details on the trade-offs and how to restore the previous fixed-sizing behavior.
-
 ## embr.el
 **Em**acs **Br**owser
 
