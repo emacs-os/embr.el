@@ -173,6 +173,8 @@ M-x embr-browse RET example.com RET
 ## Keybindings
 
 All keys are forwarded directly to the browser. Typing, arrows, backspace, tab, and enter work as expected. `C-x`, `M-x`, etc. stay free for Emacs. Top-level keybindings translate familiar Emacs motion keys into browser equivalents (`C-c ?` to view them all). For vim-style modal navigation, enable `embr-vimium-mode`.
+Click the header line with mouse-1 to copy the current URL and open the `URL/Search` minibuffer prompt in one step.
+Mouse-2 opens the hovered/clicked link in a new tab. Mouse-3 opens a context menu with Open URL, Reload, Back, Forward, Download, Download URL, Print PDF, Screenshot, Reader, View text, Open in eww, View source, and Page info. Open URL navigates to the hovered/clicked link when one is present, otherwise it falls back to the normal URL/Search minibuffer prompt.
 
 ![top-level bindkeys](assets/toplevel-bindkeys.png)
 
