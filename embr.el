@@ -1829,6 +1829,13 @@ FUNCTION is called in the owning embr buffer."
     (message "embr: hint retry failed; please try again")
     (embr--hint-finish-session)))
 
+(defun embr--hint-minibuffer-setup ()
+  "Bind ESC to abort in the hint-selection minibuffer."
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map (current-local-map))
+    (define-key map [escape] #'abort-recursive-edit)
+    (use-local-map map)))
+
 (defun embr--hint-read-session (session-id)
   "Prompt for and execute a hint selection for SESSION-ID."
   (when (embr--hint-current-session-p session-id)
@@ -1840,9 +1847,11 @@ FUNCTION is called in the owning embr buffer."
             (unwind-protect
                 (progn
                   (setq chosen (condition-case nil
-                                   (completing-read (embr--hint-action-prompt action)
-                                                    (embr--hint-descriptions hints)
-                                                    nil t)
+                                   (minibuffer-with-setup-hook
+                                       #'embr--hint-minibuffer-setup
+                                     (completing-read (embr--hint-action-prompt action)
+                                                      (embr--hint-descriptions hints)
+                                                      nil t))
                                  (quit nil)))
                   (setq hint (embr--hint-find-choice hints chosen)))
               (embr--hint-finish-session))
@@ -2024,10 +2033,17 @@ With prefix argument, prompt for a URL instead."
 
 (defvar embr--search-query "" "Current find-in-page query.")
 (defvar embr--searching nil "Non-nil when in a search sequence.")
+(defvar embr--search-direction 'forward
+  "Direction of the last initiated search, either `forward' or `backward'.")
 
 (defun embr--maybe-end-search ()
   "Clear search state if the next command is not a search command."
-  (unless (memq this-command '(embr-isearch-forward embr-isearch-backward))
+  (unless (memq this-command '(embr-isearch-forward
+                               embr-isearch-backward
+                               embr-vimium-search-forward
+                               embr-vimium-search-backward
+                               embr-vimium-search-next
+                               embr-vimium-search-previous))
     (setq embr--searching nil)))
 
 (defun embr--find-on-page (backwards)
@@ -2048,6 +2064,7 @@ With prefix argument, prompt for a URL instead."
 (defun embr-isearch-forward ()
   "Search forward.  First call prompts for query; repeating finds next match."
   (interactive)
+  (setq embr--search-direction 'forward)
   (if (and embr--searching
            (not (string-empty-p embr--search-query)))
       (embr--find-on-page nil)
@@ -2060,6 +2077,7 @@ With prefix argument, prompt for a URL instead."
 (defun embr-isearch-backward ()
   "Search backward.  First call prompts for query; repeating finds previous match."
   (interactive)
+  (setq embr--search-direction 'backward)
   (if (and embr--searching
            (not (string-empty-p embr--search-query)))
       (embr--find-on-page t)
@@ -2068,6 +2086,42 @@ With prefix argument, prompt for a URL instead."
       (unless (string-empty-p query)
         (setq embr--search-query query)
         (embr--find-on-page t)))))
+
+(defun embr-vimium-search-forward ()
+  "Prompt for a query and search forward, vim-style.
+Unlike `embr-isearch-forward', always prompt; use
+`embr-vimium-search-next' to repeat."
+  (interactive)
+  (setq embr--search-direction 'forward)
+  (let ((query (read-string "Search: " embr--search-query)))
+    (unless (string-empty-p query)
+      (setq embr--search-query query)
+      (embr--find-on-page nil))))
+
+(defun embr-vimium-search-backward ()
+  "Prompt for a query and search backward, vim-style.
+Unlike `embr-isearch-backward', always prompt; use
+`embr-vimium-search-next' to repeat."
+  (interactive)
+  (setq embr--search-direction 'backward)
+  (let ((query (read-string "Search backward: " embr--search-query)))
+    (unless (string-empty-p query)
+      (setq embr--search-query query)
+      (embr--find-on-page t))))
+
+(defun embr-vimium-search-next ()
+  "Repeat the last search in the same direction, like vim's n."
+  (interactive)
+  (if (string-empty-p embr--search-query)
+      (message "embr: no previous search")
+    (embr--find-on-page (eq embr--search-direction 'backward))))
+
+(defun embr-vimium-search-previous ()
+  "Repeat the last search in the opposite direction, like vim's N."
+  (interactive)
+  (if (string-empty-p embr--search-query)
+      (message "embr: no previous search")
+    (embr--find-on-page (not (eq embr--search-direction 'backward)))))
 
 ;; ── Tab bar ────────────────────────────────────────────────────────
 
@@ -3082,8 +3136,10 @@ DESCRIPTION is shown in the prompt."
     ("C-d" "Page down" embr-dispatch-close :transient nil)
     ("C-u" "Page up" embr-dispatch-close :transient nil)]
    ["Search"
-    ("/" "Search forward" embr-isearch-forward)
-    ("?" "Search backward" embr-isearch-backward)]
+    ("/" "Search forward" embr-vimium-search-forward)
+    ("?" "Search backward" embr-vimium-search-backward)
+    ("n" "Next match" embr-vimium-search-next)
+    ("N" "Previous match" embr-vimium-search-previous)]
    ["Actions"
     ("f" "Hint link" embr-follow-hint)
     ("o" "Open URL" embr-navigate)
@@ -3175,8 +3231,10 @@ DESCRIPTION is shown in the prompt."
     (define-key map (kbd "G") (lambda () (interactive) (embr-vimium--send-key "End")))
     (define-key map (kbd "C-d") (lambda () (interactive) (embr-vimium--send-key "PageDown")))
     (define-key map (kbd "C-u") (lambda () (interactive) (embr-vimium--send-key "PageUp")))
-    (define-key map (kbd "/") #'embr-isearch-forward)
-    (define-key map (kbd "?") #'embr-isearch-backward)
+    (define-key map (kbd "/") #'embr-vimium-search-forward)
+    (define-key map (kbd "?") #'embr-vimium-search-backward)
+    (define-key map (kbd "n") #'embr-vimium-search-next)
+    (define-key map (kbd "N") #'embr-vimium-search-previous)
     (define-key map (kbd "f") #'embr-follow-hint)
     (define-key map (kbd "H") #'embr-back)
     (define-key map (kbd "L") #'embr-forward)
