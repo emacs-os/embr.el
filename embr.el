@@ -1829,8 +1829,8 @@ FUNCTION is called in the owning embr buffer."
     (message "embr: hint retry failed; please try again")
     (embr--hint-finish-session)))
 
-(defun embr--hint-minibuffer-setup ()
-  "Bind ESC to abort in the hint-selection minibuffer."
+(defun embr--minibuffer-escape-setup ()
+  "Bind ESC to abort in the current minibuffer."
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map (current-local-map))
     (define-key map [escape] #'abort-recursive-edit)
@@ -1848,7 +1848,7 @@ FUNCTION is called in the owning embr buffer."
                 (progn
                   (setq chosen (condition-case nil
                                    (minibuffer-with-setup-hook
-                                       #'embr--hint-minibuffer-setup
+                                       #'embr--minibuffer-escape-setup
                                      (completing-read (embr--hint-action-prompt action)
                                                       (embr--hint-descriptions hints)
                                                       nil t))
@@ -3284,10 +3284,19 @@ DESCRIPTION is shown in the prompt."
         embr-vimium-normal-map)
   (force-mode-line-update))
 
+(defun embr-vimium--minibuffer-setup ()
+  "Bind ESC to abort minibuffers invoked from a vimium-mode buffer."
+  (when-let* ((win (minibuffer-selected-window))
+              (buf (window-buffer win)))
+    (when (buffer-local-value 'embr-vimium-mode buf)
+      (embr--minibuffer-escape-setup))))
+
 (define-minor-mode embr-vimium-mode
   "Toggle vimium-style modal keybindings for embr.
 In normal mode, bare keys act as vim-style navigation.
-In insert mode, keys pass through to the browser."
+In insert mode, keys pass through to the browser.
+While enabled, ESC aborts any minibuffer prompt invoked from the
+vimium buffer."
   :lighter nil
   (if embr-vimium-mode
       (progn
@@ -3296,10 +3305,15 @@ In insert mode, keys pass through to the browser."
               (if embr-vimium-start-in-normal
                   embr-vimium-normal-map
                 embr-vimium-insert-map))
+        (add-hook 'minibuffer-setup-hook #'embr-vimium--minibuffer-setup)
         (force-mode-line-update))
     (setq embr-vimium--insert-mode nil)
     (setq minor-mode-overriding-map-alist
           (assq-delete-all 'embr-vimium-mode minor-mode-overriding-map-alist))
+    (unless (seq-some (lambda (buf)
+                        (buffer-local-value 'embr-vimium-mode buf))
+                      (buffer-list))
+      (remove-hook 'minibuffer-setup-hook #'embr-vimium--minibuffer-setup))
     (force-mode-line-update)))
 
 ;; ── Dynamic viewport sizing ──────────────────────────────────────
