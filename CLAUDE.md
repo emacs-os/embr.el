@@ -33,7 +33,7 @@ Two frame sources (`embr-frame-source`):
 Two render backends (`embr-render-backend`):
 
 - **`'default`**: Python writes JPEG to a temp file (`/tmp/embr-frame.jpg`), renames atomically. Emacs reads the file via `insert-file-contents-literally` and displays with `create-image`. Render timer batches frames.
-- **`'canvas`**: Python sends JPEG bytes over a Unix socket with a binary header (seq, width, height, length). Emacs native C module (`embr-canvas-blit-jpeg`) decodes and blits directly to a canvas pixel buffer. Requires canvas-patched Emacs.
+- **`'canvas`**: Python sends JPEG bytes over a Unix socket with a binary header (seq, width, height, length). Emacs native C module (`embr-canvas-blit-jpeg`) decodes and blits directly to a canvas pixel buffer, then calls `canvas-refresh`. Requires Emacs 32+ (native canvas images). `embr-render-backend` defaults to `'auto` (`'default` behaves identically): `embr--canvas-probe` (Emacs support, module build, module load, smoke blit) decides once per session and `embr--select-backend` falls back to the JPEG file backend with a one-time notice.
 
 ## Buffer-Local State and Multi-Session
 
@@ -45,7 +45,7 @@ Key patterns:
 - Canvas socket filter (`embr--canvas-socket-filter`) uses the same routing pattern
 - Hover and render timers capture the owning buffer in a closure at creation time and use `with-current-buffer` in the tick function
 - `embr--default-display-frame` captures `embr--frame-path` in a let binding before entering `with-temp-buffer` (buffer-local vars are not visible inside `with-temp-buffer`)
-- Each canvas image gets a unique `canvas-id` derived from the buffer name
+- Each canvas image gets a unique uninterned `:id` symbol derived from the buffer name (the image cache compares specs with `equal`, so a resize must produce a non-`equal` spec)
 
 Incognito mode (`embr-browse-incognito`) uses the same `embr-mode` with `embr--incognito-flag` set. The daemon gets `EMBR_INCOGNITO=1` env var, uses `tempfile.mkdtemp()` for its profile, separate frame/perf-log paths, and `shutil.rmtree()` on quit.
 
@@ -66,7 +66,7 @@ Incognito mode (`embr-browse-incognito`) uses the same `embr-mode` with `embr--i
 - No formal test suite. Testing is manual via interactive Emacs commands.
 - No linter/formatter config. Emacs Lisp follows GNU conventions; Python is PEP-ish.
 - `blocklist.txt` is in `.gitignore` -- downloaded by `setup.sh`, not checked in.
-- Emacs 30.1+ required (native JSON via `json-serialize`/`json-parse-string`). Python 3.10+ required.
+- Emacs 30.1+ required (native JSON via `json-serialize`/`json-parse-string`). Emacs 32+ required for the canvas backend. Python 3.10+ required.
 - Browser profile persists at `~/.local/share/embr/chromium-profile/`.
 - Extensions stored at `~/.local/share/embr/extensions/` (ublock/, darkreader/).
 - Incognito uses temp profile wiped on quit. Separate frame path (`embr-incognito-frame.jpg`) and perf log (`embr-incognito-perf.jsonl`).

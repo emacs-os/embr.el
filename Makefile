@@ -21,7 +21,8 @@ checkpy:
 shellcheck:
 	$(SHELLCHECK) setup.sh && echo "OK: shell scripts pass shellcheck"
 
-# Native canvas module — requires canvas-patched Emacs + libjpeg-turbo.
+# Native canvas module — requires Emacs 32+ (native canvas images) + libjpeg-turbo.
+# Pass EMACS_INCLUDE=/path/to/include if emacs-module.h is not on the default path.
 module:
 	$(MAKE) -C native
 

@@ -1,16 +1,23 @@
 /* embr-canvas.c -- Emacs dynamic module for canvas frame blitting.
  *
  * Decodes JPEG data via libjpeg-turbo and writes pixels directly
- * into an Emacs canvas buffer, bypassing the Elisp image pipeline.
+ * into an Emacs canvas pixel buffer, bypassing the Elisp image
+ * pipeline.  The canvas image type and the `canvas_data' module
+ * function are part of Emacs 32; Emacs redraws the canvas when the
+ * Lisp function `canvas-refresh' is called.
  *
- * Requires: Emacs 31+ with canvas patch, libjpeg-turbo.
+ * Requires: Emacs 32+ built with a window system, libjpeg-turbo.
  *
- * Build:  make -C native
+ * Build:  make -C native [EMACS_INCLUDE=/path/to/include]
  * Load:   (module-load "native/embr-canvas.so")
+ *
+ * Built against an older emacs-module.h the module still compiles,
+ * but `embr-canvas-supported-p' returns nil.
  */
 
 #include <emacs-module.h>
 #include <setjmp.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -20,9 +27,17 @@
 
 int plugin_is_GPL_compatible;
 
-/* True if the running Emacs has canvas_pixel/canvas_refresh. */
+/* The canvas_data environment function appeared in Emacs 32. */
+#if defined EMACS_MAJOR_VERSION && EMACS_MAJOR_VERSION >= 32
+# define EMBR_HAVE_CANVAS_API 1
+#else
+# define EMBR_HAVE_CANVAS_API 0
+#endif
+
+/* True if the running Emacs provides canvas_data. */
 static int canvas_api_available = 0;
 
+#define EMBR_MODULE_VERSION "2.0.0"
 #define EMBR_MAX_DIMENSION 32768
 #define EMBR_MAX_JPEG_BYTES (64u * 1024u * 1024u)
 
@@ -59,6 +74,29 @@ embr_extract_dimension (emacs_env *env, emacs_value arg, int *out)
   return 1;
 }
 
+/* Return the ARGB32 pixel buffer of CANVAS, or NULL.  On an invalid
+   spec Emacs leaves a pending error that is raised when the module
+   function returns.  */
+static uint32_t *
+embr_canvas_data (emacs_env *env, emacs_value canvas)
+{
+#if EMBR_HAVE_CANVAS_API
+  if (canvas_api_available)
+    return env->canvas_data (env, canvas);
+#else
+  (void) env; (void) canvas;
+#endif
+  return NULL;
+}
+
+/* Ask Emacs to redraw CANVAS after its pixel buffer changed.  */
+static void
+embr_canvas_refresh (emacs_env *env, emacs_value canvas)
+{
+  emacs_value args[2] = { canvas, env->intern (env, "nil") };
+  env->funcall (env, env->intern (env, "canvas-refresh"), 2, args);
+}
+
 /* ── embr-canvas-supported-p ─────────────────────────────────── */
 
 static emacs_value
@@ -81,7 +119,7 @@ Fembr_canvas_blit_jpeg (emacs_env *env, ptrdiff_t nargs,
     return env->intern (env, "nil");
 
   /* 1. Get canvas pixel buffer. */
-  uint32_t *pixel = env->canvas_pixel (env, args[0]);
+  uint32_t *pixel = embr_canvas_data (env, args[0]);
   if (!pixel)
     return env->intern (env, "nil");
 
@@ -218,7 +256,7 @@ Fembr_canvas_blit_jpeg (emacs_env *env, ptrdiff_t nargs,
     return env->intern (env, "nil");
 
   /* 5. Tell Emacs the canvas changed. */
-  env->canvas_refresh (env, args[0]);
+  embr_canvas_refresh (env, args[0]);
   result = env->intern (env, "t");
   return result;
 }
@@ -234,7 +272,7 @@ Fembr_canvas_clear (emacs_env *env, ptrdiff_t nargs,
   if (!canvas_api_available)
     return env->intern (env, "nil");
 
-  uint32_t *pixel = env->canvas_pixel (env, args[0]);
+  uint32_t *pixel = embr_canvas_data (env, args[0]);
   if (!pixel)
     return env->intern (env, "nil");
 
@@ -251,7 +289,7 @@ Fembr_canvas_clear (emacs_env *env, ptrdiff_t nargs,
     return env->intern (env, "nil");
 
   memset (pixel, 0, bytes);
-  env->canvas_refresh (env, args[0]);
+  embr_canvas_refresh (env, args[0]);
   return env->intern (env, "t");
 }
 
@@ -262,7 +300,8 @@ Fembr_canvas_version (emacs_env *env, ptrdiff_t nargs,
                       emacs_value *args, void *data)
 {
   (void)nargs; (void)args; (void)data;
-  return env->make_string (env, "1.1.0", 5);
+  return env->make_string (env, EMBR_MODULE_VERSION,
+                           sizeof EMBR_MODULE_VERSION - 1);
 }
 
 /* ── Module init ─────────────────────────────────────────────── */
@@ -274,21 +313,28 @@ emacs_module_init (struct emacs_runtime *ert)
     return 1;
   emacs_env *env = ert->get_environment (ert);
 
-  /* Detect canvas API by checking env struct size. */
-  canvas_api_available = (env->size >= (ptrdiff_t) sizeof (*env));
+  /* The running Emacs provides canvas_data if its environment
+     struct extends past that slot.  */
+#if EMBR_HAVE_CANVAS_API
+  canvas_api_available
+    = (env->size > (ptrdiff_t) offsetof (emacs_env, canvas_data));
+#else
+  canvas_api_available = 0;
+#endif
 
   emacs_value defalias = env->intern (env, "defalias");
   emacs_value func;
   emacs_value sym;
 
   func = env->make_function (env, 0, 0, Fembr_canvas_supported_p,
-    "Return t if canvas pixel API is available.", NULL);
+    "Return t if the Emacs 32 canvas pixel API is available.", NULL);
   sym = env->intern (env, "embr-canvas-supported-p");
   env->funcall (env, defalias, 2, (emacs_value[]){sym, func});
 
   func = env->make_function (env, 5, 5, Fembr_canvas_blit_jpeg,
     "Decode JPEG-DATA and blit to CANVAS at WIDTH x HEIGHT.\n"
-    "SEQ is the frame sequence number (used by caller for ordering).", NULL);
+    "SEQ is the frame sequence number (used by caller for ordering).\n"
+    "Call `canvas-refresh' on CANVAS afterwards and return t.", NULL);
   sym = env->intern (env, "embr-canvas-blit-jpeg");
   env->funcall (env, defalias, 2, (emacs_value[]){sym, func});
 

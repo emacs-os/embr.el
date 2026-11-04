@@ -1,7 +1,7 @@
 ## embr.el
 **Em**acs **Br**owser
 
-Emacs is the display server. Headless Chromium is the renderer, using either [CloakBrowser](https://cloakbrowser.dev) (default, anti-fingerprinting, closed-source patches) or vanilla Playwright Chromium (fully open source). Frame transport uses CDP screencast. Emacs simulation keys pass through to the browser (similar to EXWM), and an optional `embr-vimium-mode` provides modal navigation for evil-mode users. Emacs canvas (optional) significantly improves rendering performance. If you build Emacs with the [canvas patch](https://github.com/minad/emacs-canvas-patch) (see [./canvasmacs](./canvasmacs)) and set `embr-render-backend` to `'canvas`, embr renders frames directly to a pixel buffer via a native C module. We are excited about and advocating for this patch to be [mainlined into Emacs](https://debbugs.gnu.org/cgi/bugreport.cgi?bug=80281#389) -- embr serves as a proof of concept that canvas enables real-time buffer rendering in Emacs.
+Emacs is the display server. Headless Chromium is the renderer, using either [CloakBrowser](https://cloakbrowser.dev) (default, anti-fingerprinting, closed-source patches) or vanilla Playwright Chromium (fully open source). Frame transport uses CDP screencast. Emacs simulation keys pass through to the browser (similar to EXWM), and an optional `embr-vimium-mode` provides modal navigation for evil-mode users. For the best rendering performance, run an Emacs with native canvas image support (Emacs 32 and newer): embr detects it at startup and blits frames straight into a pixel buffer through a small C module, and falls back to a JPEG file per frame on older Emacs. See [Native canvas rendering](#native-canvas-rendering-emacs-32). Canvas images were [mainlined into Emacs](https://debbugs.gnu.org/cgi/bugreport.cgi?bug=80281) in July 2026, with embr as a proof of concept that canvas enables real-time buffer rendering in Emacs.
 
 ![embr screenshot](assets/screenshot-v2.png)
 
@@ -9,6 +9,7 @@ Emacs is the display server. Headless Chromium is the renderer, using either [Cl
 
 - Python 3.10+
 - Emacs 30.1+
+- Optional, for native canvas rendering: Emacs 32+ built with a window system, plus a C compiler, `make` and the libjpeg-turbo development headers
 
 ## Installation
 
@@ -32,7 +33,7 @@ Emacs is the display server. Headless Chromium is the renderer, using either [Cl
         embr-scroll-method 'instant
         embr-scroll-step 100
         embr-frame-source 'screencast
-        embr-render-backend 'default
+        embr-render-backend 'auto
         embr-display-method 'headless
         embr-home-url "about:blank"
         embr-session-restore t
@@ -60,7 +61,7 @@ Emacs is the display server. Headless Chromium is the renderer, using either [Cl
         embr-scroll-method 'instant
         embr-scroll-step 100
         embr-frame-source 'screencast
-        embr-render-backend 'default
+        embr-render-backend 'auto
         embr-display-method 'headless
         embr-home-url "about:blank"
         embr-session-restore t
@@ -116,6 +117,34 @@ All management is done from Emacs, no terminal needed. CloakBrowser setup builds
 | Cookies & sessions (CloakBrowser) | `~/.local/share/embr/chromium-profile/` |
 | Cookies & sessions (Chromium) | `~/.local/share/embr/playwright-profile/` |
 
+### Native canvas rendering (Emacs 32+)
+
+Emacs 32 includes native canvas images: an image whose pixel buffer a dynamic module can write to directly. embr uses them automatically. On the first `M-x embr-browse` in such an Emacs, embr builds `native/embr-canvas.so` with `make -C native` (this needs a C compiler, `make` and the libjpeg-turbo development headers, e.g. `libjpeg-turbo` on Arch or `libjpeg-dev` on Debian/Ubuntu), loads it, and reports `canvas backend` in the echo area. On an Emacs without native canvas images, embr uses the JPEG file path and says so once per session.
+
+We no longer recommend a specific Emacs patch. For the best support, run an Emacs with native canvas support included, which means Emacs 32 or newer: your distribution's development package (for example `emacs-git` on Arch) or a build of the [Emacs master branch](https://git.savannah.gnu.org/cgit/emacs.git).
+
+`M-x embr-backend-info` shows the active backend and the result of the canvas probe. If the module was built against the wrong `emacs-module.h` (for example a header left behind by an older Emacs), rebuild it against the header of the Emacs you run, then restart Emacs:
+
+```sh
+make -C native clean all EMACS_INCLUDE=/path/to/include
+```
+
+Benchmark with CDP screencast transport, measured with the pre-merge canvas patch (`tools/embr-perf-report.py`):
+
+| Metric | Canvas | Default |
+|--------|--------|---------|
+| Input-to-frame p50 | **10.0ms** | 14.4ms |
+| Input-to-frame p95 | **28.4ms** | 44.8ms |
+| Frame interval p50 | **28.9ms** | 29.5ms |
+| Effective FPS | **34.6** | 33.9 |
+| FPS 30+ bucket | **78.0%** | 79.5% |
+| Drop ratio | **0.304** | 0.336 |
+| Render skips | **0** | 20 |
+| Freezes | 1 (1485ms) | 1 (2250ms) |
+| Severe freezes | **0** | 1 |
+
+Canvas wins on input latency (30-35% lower at p50/p95), with zero render skips and no severe freezes. Effective FPS is capped around 30-35 either way: the embr pipeline adds about 0.01ms per frame, and the rest is Chromium's compositor producing the next screencast frame.
+
 ## Configuration
 
 | Variable | Type | Default | Description |
@@ -141,7 +170,7 @@ All management is done from Emacs, no terminal needed. CloakBrowser setup builds
 | `embr-download-directory` | directory | `~/Downloads/` | Directory where downloaded files are saved. |
 | `embr-jpeg-quality` | integer | `80` | JPEG quality (1-100) for frame captures. Used by both screencast and screenshot. Lower values encode faster but degrade image quality. |
 | `embr-frame-source` | symbol | `'screencast` | `'screencast` uses CDP screencast (recommended). `'screenshot` uses polling only. |
-| `embr-render-backend` | symbol | `'default` | `'default` uses JPEG file + create-image. `'canvas` requires canvas-patched Emacs. |
+| `embr-render-backend` | symbol | `'auto` | `'auto` uses the native canvas pixel path when the running Emacs has native canvas images (Emacs 32+) and falls back to the JPEG file path otherwise. `'canvas` requires native canvas and errors when it is unavailable. `'default` behaves exactly like `'auto`. |
 | `embr-display-method` | symbol | `'headless` | `'headless`, `'headed` (requires Xvfb), `'headed-offscreen` (requires Xvfb). |
 | `embr-dispatch-key` | string | `"C-c"` | Key that opens the transient dispatch menu. Must be set before embr is loaded. |
 | `embr-vimium-leader` | string | `"SPC"` | Key that opens the dispatch menu in vimium normal mode. |

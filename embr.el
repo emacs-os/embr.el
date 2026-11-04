@@ -26,8 +26,9 @@
 ;; Clicks, keystrokes, and scroll events are forwarded to the browser.
 ;; Two browser engines are supported: CloakBrowser (default,
 ;; anti-fingerprinting) and vanilla Playwright Chromium.  Frames are
-;; delivered via CDP screencast, with an optional canvas backend that
-;; renders directly to a pixel buffer over a Unix socket.
+;; delivered via CDP screencast.  On Emacs 32 and newer they are
+;; blitted straight into a native canvas pixel buffer over a Unix
+;; socket; older Emacs falls back to a JPEG file per frame.
 ;;
 ;; The Python daemon (`embr.py') controls the browser through
 ;; Playwright.  Communication uses JSON lines over stdin/stdout,
@@ -257,12 +258,19 @@ at the cost of hover precision."
   "Deprecated. Screenshot-only. Minimum hover rate under load pressure."
   :type 'integer)
 
-(defcustom embr-render-backend 'default
+(defcustom embr-render-backend 'auto
   "Render backend for frame display.
-`default' uses the JPEG file + create-image path (works on any Emacs).
-`canvas' uses the native canvas pixel path (requires canvas-patched Emacs)."
-  :type '(choice (const :tag "Default (JPEG file)" default)
-                 (const :tag "Canvas (requires patch)" canvas)))
+`auto' uses the native canvas pixel path when the running Emacs has
+native canvas images (Emacs 32 and newer) and the embr-canvas module
+builds and loads, and otherwise falls back to the JPEG file +
+`create-image' path, which works on any Emacs.
+`default' behaves exactly like `auto', so existing configurations that
+set it get native canvas automatically when it is available.
+`canvas' requires the native canvas path and signals an error when it
+is not available."
+  :type '(choice (const :tag "Auto (canvas when available)" auto)
+                 (const :tag "Canvas (requires Emacs 32+)" canvas)
+                 (const :tag "Default (same as auto)" default)))
 
 (defcustom embr-display-method 'headless
   "How the browser display is managed.
@@ -673,7 +681,7 @@ Does not remove the Emacs package itself."
 (defvar embr--canvas-stale-count 0 "Number of stale/out-of-order frames dropped.")
 (defvar embr--canvas-error-count 0 "Consecutive canvas blit errors.")
 (defvar embr--canvas-frame-count 0 "Total frames blitted via canvas backend.")
-(defvar embr--canvas-resize-count 0 "Counter for generating unique canvas-ids on resize.")
+(defvar embr--canvas-resize-count 0 "Counter for generating unique canvas `:id' symbols on resize.")
 (defvar embr--default-frame-count 0 "Total frames rendered via default backend.")
 (defvar embr--zoom-level 1.0 "Current page zoom level.")
 (defvar embr--incognito-flag nil "Non-nil when this buffer is an incognito session.")
@@ -827,6 +835,20 @@ Respects `embr-display-method' for display modes."
 (defconst embr--canvas-max-errors 5
   "Consecutive canvas blit errors before fallback to default.")
 
+(defconst embr--canvas-module-version "2.0.0"
+  "Oldest embr-canvas module version that targets the Emacs 32 canvas API.")
+
+(defvar embr--canvas-probe-result nil
+  "Cached result of `embr--canvas-probe' for this Emacs session.
+A cons (STATUS . DETAIL).  STATUS is one of `available',
+`no-emacs-support', `module-build-failed', `module-load-failed',
+`module-unsupported' or `smoke-test-failed'; DETAIL is a string
+explaining it.  Not buffer-local: canvas support is a property of
+the running Emacs, not of a session.")
+
+(defvar embr--canvas-notice-shown nil
+  "Non-nil once the canvas fallback notice was shown in this session.")
+
 (defun embr--canvas-source-dir ()
   "Return the directory containing native module source.
 Resolves symlinks so this works when Elpaca symlinks embr.el
@@ -834,64 +856,161 @@ from the build dir to the source repo."
   (file-name-directory (file-truename
                         (expand-file-name "embr.el" embr--directory))))
 
-(defun embr--canvas-maybe-compile ()
-  "Compile the canvas native module if source exists but .so does not."
-  (let* ((source-dir (embr--canvas-source-dir))
-         (so (expand-file-name "native/embr-canvas.so" source-dir))
-         (src (expand-file-name "native/embr-canvas.c" source-dir)))
-    (when (and (file-exists-p src) (not (file-exists-p so)))
-      (message "embr: compiling canvas module...")
-      (let ((ret (call-process
-                  "make" nil nil nil "-C"
-                  (expand-file-name "native" source-dir))))
-        (if (= ret 0)
-            (message "embr: canvas module compiled")
-          (message "embr: canvas module compilation failed (exit %d)" ret))))))
+(defun embr--emacs-canvas-p ()
+  "Return non-nil if the running Emacs has native canvas images.
+Native canvas images arrived in Emacs 32 together with the Lisp
+function `canvas-refresh'; the pre-merge canvas patch had the image
+type but not the function, so it is treated as unsupported."
+  (and (image-type-available-p 'canvas)
+       (fboundp 'canvas-refresh)))
 
-(defun embr--canvas-available-p ()
-  "Return non-nil if canvas rendering is available.
-Layer 1: image type.  Layer 2: native module.  Layer 3: smoke render."
-  (and
-   ;; Layer 1: Elisp image type.
-   (image-type-available-p 'canvas)
-   ;; Layer 2: native module loads and reports support.
-   (condition-case err
-       (progn
-         (embr--canvas-maybe-compile)
-         (module-load
-          (expand-file-name "native/embr-canvas.so"
-                            (embr--canvas-source-dir)))
-         (and (fboundp 'embr-canvas-supported-p)
-              (embr-canvas-supported-p)))
-     (error
-      (message "embr: canvas module unavailable: %s"
-               (error-message-string err))
-      nil))
-   ;; Layer 3: smoke render (create tiny canvas, call module, verify
-   ;; no crash).  Blit returns nil for invalid JPEG but exercises
-   ;; canvas_pixel internally, proving the API works end-to-end.
-   (condition-case err
-       (progn
-         (embr-canvas-blit-jpeg
-          '(image :type canvas
-                  :canvas-id embr--smoke-test
-                  :canvas-width 4
-                  :canvas-height 4)
-          "" 4 4 0)
-         t)
-     (error
-      (message "embr: canvas smoke test failed: %s"
-               (error-message-string err))
-      nil))))
+(defun embr--canvas-include-dir ()
+  "Return the directory holding the running Emacs's `emacs-module.h', or nil.
+Compiling the module against that header, rather than against whatever
+header is first on the default include path, keeps a stale header from
+another Emacs installation from producing a module without canvas
+support."
+  (cl-some (lambda (dir)
+             (and dir
+                  (file-exists-p (expand-file-name "emacs-module.h" dir))
+                  (directory-file-name dir)))
+           (list
+            ;; Installed Emacs: PREFIX/share/emacs/VERSION/etc/ -> PREFIX/include.
+            (expand-file-name "../../../../include" data-directory)
+            ;; Emacs run from its build tree.
+            (and (stringp source-directory)
+                 (expand-file-name "src" source-directory)))))
+
+(defun embr--canvas-maybe-compile ()
+  "Compile the canvas native module when it is missing or out of date.
+Return nil on success, or a string describing the failure."
+  (let* ((native-dir (expand-file-name "native" (embr--canvas-source-dir)))
+         (so (expand-file-name "embr-canvas.so" native-dir))
+         (src (expand-file-name "embr-canvas.c" native-dir)))
+    (cond
+     ((not (file-exists-p src))
+      (format "module source %s not found" src))
+     ;; A module built from the current source is fine; a stale one
+     ;; must be rebuilt before it is loaded, since Emacs cannot
+     ;; unload a module.
+     ((and (file-exists-p so) (not (file-newer-than-file-p src so)))
+      nil)
+     ((not (executable-find "make"))
+      "make not found; install a C compiler, make and libjpeg-turbo headers")
+     (t
+      (message "embr: compiling canvas module...")
+      (let* ((buf (get-buffer-create "*embr-canvas-build*"))
+             (include (embr--canvas-include-dir))
+             (args (append (list "-C" native-dir)
+                           (and include
+                                (list (concat "EMACS_INCLUDE=" include)))))
+             ret)
+        (with-current-buffer buf
+          (let ((inhibit-read-only t))
+            (erase-buffer)
+            (insert "make " (mapconcat #'identity args " ") "\n")))
+        (setq ret (apply #'call-process "make" nil buf nil args))
+        (if (and (eql ret 0) (file-exists-p so))
+            (progn
+              (message "embr: compiling canvas module...done")
+              nil)
+          (format "make -C native failed (exit %s), see buffer %s"
+                  ret (buffer-name buf))))))))
+
+(defun embr--canvas-probe-1 ()
+  "Run the canvas probe steps and return (STATUS . DETAIL).
+See `embr--canvas-probe-result' for the possible values."
+  (let ((so (expand-file-name "native/embr-canvas.so"
+                              (embr--canvas-source-dir)))
+        failure)
+    (cond
+     ;; Step 1: the running Emacs must have native canvas images.
+     ((not (embr--emacs-canvas-p))
+      (cons 'no-emacs-support
+            (format "Emacs %s has no native canvas images" emacs-version)))
+     ;; Step 2: build the module when it is missing or stale.
+     ((setq failure (embr--canvas-maybe-compile))
+      (cons 'module-build-failed failure))
+     ;; Step 3: load the module and check that it targets this API.
+     ((setq failure (condition-case err
+                        (progn (module-load so) nil)
+                      (error (error-message-string err))))
+      (cons 'module-load-failed failure))
+     ((not (and (fboundp 'embr-canvas-supported-p)
+                (embr-canvas-supported-p)))
+      (cons 'module-unsupported
+            (concat "embr-canvas.so was built without the Emacs 32 canvas API; "
+                    "rebuild it with make -C native clean all "
+                    "EMACS_INCLUDE=<directory of emacs-module.h> and restart Emacs")))
+     ((not (and (fboundp 'embr-canvas-version)
+                (version<= embr--canvas-module-version (embr-canvas-version))))
+      (cons 'module-unsupported
+            (format "embr-canvas.so is version %s, need %s or newer; run make -C native clean all and restart Emacs"
+                    (embr-canvas-version) embr--canvas-module-version)))
+     ;; Step 4: smoke blit through the whole chain.  An empty JPEG
+     ;; makes the blit return nil, but it exercises canvas_data and
+     ;; the spec keywords end to end.
+     ((setq failure (condition-case err
+                        (progn
+                          (embr-canvas-blit-jpeg
+                           '(image :type canvas
+                                   :id embr--smoke-test
+                                   :data-width 4
+                                   :data-height 4)
+                           "" 4 4 0)
+                          nil)
+                      (error (error-message-string err))))
+      (cons 'smoke-test-failed failure))
+     (t
+      (cons 'available (format "embr-canvas %s" (embr-canvas-version)))))))
+
+(defun embr--canvas-probe ()
+  "Return whether native canvas rendering is available, as (STATUS . DETAIL).
+The result is computed once per Emacs session and cached in
+`embr--canvas-probe-result'."
+  (or embr--canvas-probe-result
+      (setq embr--canvas-probe-result (embr--canvas-probe-1))))
 
 (defun embr--select-backend ()
-  "Select the render backend based on `embr-render-backend'."
+  "Select the render backend based on `embr-render-backend'.
+Return \"canvas\" or \"default\", the names the daemon understands."
   (pcase embr-render-backend
     ('canvas
-     (if (embr--canvas-available-p)
-         "canvas"
-       (error "embr: canvas backend requested but not available")))
-    (_ "default")))
+     (let ((probe (embr--canvas-probe)))
+       (if (eq (car probe) 'available)
+           "canvas"
+         (error "embr: canvas backend requested but not available: %s"
+                (cdr probe)))))
+    ;; `auto' and `default' (and anything else) behave the same.
+    (_ (if (eq (car (embr--canvas-probe)) 'available) "canvas" "default"))))
+
+(defun embr--canvas-maybe-notify ()
+  "Say once per session why frames go through the JPEG file backend.
+On an Emacs without native canvas images, point at Emacs 32 as the
+version that includes them.  When Emacs has them but the module could
+not be used, show the probe's diagnostic instead.  Do nothing when the
+user forced `canvas', which signals its own error."
+  (unless embr--canvas-notice-shown
+    (let ((probe (unless (eq embr-render-backend 'canvas)
+                   (embr--canvas-probe))))
+      (when (and probe (not (eq (car probe) 'available)))
+        (setq embr--canvas-notice-shown t)
+        (if (eq (car probe) 'no-emacs-support)
+            (message "embr: this Emacs has no native canvas images (included in Emacs 32 and newer); using the slower JPEG file backend.  Run an Emacs with native canvas support for faster rendering")
+          (message "embr: native canvas is available but the embr module could not be used (%s); using the JPEG file backend.  See README, \"Native canvas rendering\""
+                   (cdr probe)))))))
+
+(defun embr--backend-report (resp prefix)
+  "Report the transport and backend from init response RESP.
+PREFIX names the session in the message.  When the canvas backend is
+not in use, follow with the one-time notice from
+`embr--canvas-maybe-notify'."
+  (message "%s: %s transport, %s backend"
+           prefix
+           (or (alist-get 'frame_source resp) "unknown")
+           (embr--backend-name))
+  (unless (string= (embr--backend-name) "canvas")
+    (embr--canvas-maybe-notify)))
 
 ;; ── Backend interface ─────────────────────────────────────────────
 
@@ -951,10 +1070,6 @@ SOCKET-PATH is the daemon frame socket (used by canvas backend)."
           (ash (aref str (+ offset 1)) 8)
           (ash (aref str (+ offset 2)) 16)
           (ash (aref str (+ offset 3)) 24)))
-
-(defun embr--canvas-fallback-to-default ()
-  "Report canvas failure.  No automatic fallback."
-  (message "embr: canvas backend failed — restart embr or check native module"))
 
 (defun embr--canvas-maybe-update-stream-id (resp)
   "Update canvas stream generation from RESP if present."
@@ -1031,8 +1146,8 @@ via a process property so buffer-local vars resolve correctly."
                             ;; mismatch causes an out-of-bounds write.
                             (embr-canvas-blit-jpeg
                              embr--canvas-image jpeg-data
-                             (plist-get (cdr embr--canvas-image) :canvas-width)
-                             (plist-get (cdr embr--canvas-image) :canvas-height)
+                             (plist-get (cdr embr--canvas-image) :data-width)
+                             (plist-get (cdr embr--canvas-image) :data-height)
                              seq)
                             (cl-incf embr--canvas-frame-count)
                             (setq embr--canvas-error-count 0))
@@ -1054,9 +1169,9 @@ Connect to SOCKET-PATH and create the canvas image in the buffer."
   (let ((canvas-id (embr--canvas-next-id)))
     (setq embr--canvas-image
           `(image :type canvas
-                  :canvas-id ,canvas-id
-                  :canvas-width ,embr--viewport-width
-                  :canvas-height ,embr--viewport-height)))
+                  :id ,canvas-id
+                  :data-width ,embr--viewport-width
+                  :data-height ,embr--viewport-height)))
   (setq embr--canvas-recv-buf ""
         embr--canvas-error-count 0
         embr--canvas-last-seq 0
@@ -1096,47 +1211,50 @@ Connect to SOCKET-PATH and create the canvas image in the buffer."
      (lambda ()
        (setq embr--canvas-recv-buf ""
              embr--canvas-last-seq 0)
-       (if (fboundp 'embr-canvas-clear)
-           (embr-canvas-clear
-            embr--canvas-image
-            (plist-get (cdr embr--canvas-image) :canvas-width)
-            (plist-get (cdr embr--canvas-image) :canvas-height))
-         ;; Compatibility path for older module builds.
-         (embr--canvas-resize
-          (plist-get (cdr embr--canvas-image) :canvas-width)
-          (plist-get (cdr embr--canvas-image) :canvas-height)))))))
+       (embr-canvas-clear
+        embr--canvas-image
+        (plist-get (cdr embr--canvas-image) :data-width)
+        (plist-get (cdr embr--canvas-image) :data-height))))))
 
 (defun embr--canvas-resize (width height)
   "Recreate the canvas image at WIDTH x HEIGHT.
-Allocate a fresh canvas-id so the C module creates a new pixel
-buffer at the correct size."
+Allocate a fresh `:id' so Emacs creates a new pixel buffer at the
+correct size, then flush the old image from the cache so Emacs can
+free its buffer."
   (embr--canvas-with-mutation
    (lambda ()
-     (let ((canvas-id (embr--canvas-next-id)))
+     (let ((old-image embr--canvas-image)
+           (canvas-id (embr--canvas-next-id)))
        (setq embr--canvas-image
              `(image :type canvas
-                     :canvas-id ,canvas-id
-                     :canvas-width ,width
-                     :canvas-height ,height)))
-     (setq embr--canvas-recv-buf ""
-           embr--canvas-last-seq 0)
-     (let ((inhibit-read-only t))
-       (erase-buffer)
-       (insert (propertize " " 'display embr--canvas-image))
-       (put-text-property (point-min) (point-max) 'pointer 'arrow)
-       (goto-char (point-min))))))
+                     :id ,canvas-id
+                     :data-width ,width
+                     :data-height ,height))
+       (setq embr--canvas-recv-buf ""
+             embr--canvas-last-seq 0)
+       (let ((inhibit-read-only t))
+         (erase-buffer)
+         (insert (propertize " " 'display embr--canvas-image))
+         (put-text-property (point-min) (point-max) 'pointer 'arrow)
+         (goto-char (point-min)))
+       (when old-image
+         (image-flush old-image t))))))
 
 ;; ── Backend debug ─────────────────────────────────────────────────
 
 (defun embr-backend-info ()
-  "Display render backend diagnostics."
+  "Display render backend diagnostics, including the canvas probe result."
   (interactive)
-  (message "embr backend: %s | canvas: %d frames, %d errors, %d stale | default: %d frames"
-           (embr--backend-name)
-           embr--canvas-frame-count
-           embr--canvas-error-count
-           embr--canvas-stale-count
-           embr--default-frame-count))
+  (let ((probe (or embr--canvas-probe-result
+                   '(not-probed . "canvas not probed yet in this session"))))
+    (message "embr backend: %s | canvas: %d frames, %d errors, %d stale | default: %d frames | canvas probe: %s (%s)"
+             (embr--backend-name)
+             embr--canvas-frame-count
+             embr--canvas-error-count
+             embr--canvas-stale-count
+             embr--default-frame-count
+             (car probe)
+             (cdr probe))))
 
 (defun embr-force-default-backend ()
   "No-op.  Backend switching is not supported mid-session."
@@ -2641,9 +2759,7 @@ If the mouse is not over a link, fall back to hint selection."
           (embr--backend-init
            (or (alist-get 'render_backend resp) "default")
            (alist-get 'frame_socket_path resp))
-          (message "embr incognito: %s transport, %s backend"
-                   (or (alist-get 'frame_source resp) "unknown")
-                   (embr--backend-name))
+          (embr--backend-report resp "embr incognito")
           (when (eq embr-viewport-sizing 'dynamic)
             (embr--resize-hook-install)
             (let ((buf (current-buffer)))
@@ -3485,9 +3601,7 @@ Lisp with a URL argument, navigate to that URL."
           (embr--backend-init
            (or (alist-get 'render_backend resp) "default")
            (alist-get 'frame_socket_path resp))
-          (message "embr: %s transport, %s backend"
-                   (or (alist-get 'frame_source resp) "unknown")
-                   (embr--backend-name))
+          (embr--backend-report resp "embr")
           (when (eq embr-viewport-sizing 'dynamic)
             (embr--resize-hook-install)
             (let ((buf (current-buffer)))
