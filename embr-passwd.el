@@ -151,6 +151,27 @@ Give your own key ultimate trust: gpg --edit-key KEYID trust (select 5)."
           (write-region (point-min) (point-max) embr-passwd-file))))
     (message "Created empty vault at %s" embr-passwd-file)))
 
+(defun embr-passwd--generate ()
+  "Return a new password from pwgen, signaling an error if it fails.
+Reading the command's output through a shell would hand back its
+error message as the password; running it directly and checking the
+exit status does not."
+  (unless (executable-find "pwgen")
+    (user-error "pwgen not found; install it first"))
+  (with-temp-buffer
+    (let ((status (apply #'call-process "pwgen" nil t nil
+                         (append (split-string-and-unquote
+                                  embr-passwd-pwgen-args)
+                                 (list (number-to-string embr-passwd-length)
+                                       "1")))))
+      (unless (eql status 0)
+        (error "pwgen failed (exit %s): %s"
+               status (string-trim (buffer-string)))))
+    (let ((pw (string-trim (buffer-string))))
+      (when (string-empty-p pw)
+        (error "pwgen produced no output"))
+      pw)))
+
 ;;;###autoload
 (defun embr-passwd-add (site username email password &optional notes)
   "Add an entry for SITE with USERNAME, EMAIL, PASSWORD, and optional NOTES.
@@ -163,11 +184,7 @@ USERNAME and EMAIL are each optional; supply at least one."
            (unless (string-empty-p e) e))
          (let ((pw (read-passwd "Password (empty to generate): ")))
            (when (string-empty-p pw)
-             (unless (executable-find "pwgen")
-               (user-error "pwgen not found; install it first"))
-             (setq pw (string-trim
-                       (shell-command-to-string
-                        (format "pwgen %s %d 1" embr-passwd-pwgen-args embr-passwd-length))))
+             (setq pw (embr-passwd--generate))
              (kill-new pw)
              (message "Generated password copied to kill ring"))
            pw)
@@ -236,11 +253,7 @@ USERNAME and EMAIL are each optional; supply at least one."
   "Generate a password with pwgen and copy it to the kill ring.
 Password length is controlled by `embr-passwd-length'."
   (interactive)
-  (unless (executable-find "pwgen")
-    (user-error "pwgen not found; install it first"))
-  (let ((pw (string-trim
-             (shell-command-to-string
-              (format "pwgen %s %d 1" embr-passwd-pwgen-args embr-passwd-length)))))
+  (let ((pw (embr-passwd--generate)))
     (kill-new pw)
     (message "Generated password copied to kill ring")))
 

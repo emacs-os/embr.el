@@ -9,25 +9,32 @@ MODE="${1:---cloakbrowser}"
 
 mkdir -p "$DATA_DIR"
 
-do_cloakbrowser() {
-    cleanup() {
-        if [ $? -ne 0 ]; then
-            echo "ERROR: Setup failed. Cleaning up..." >&2
-            rm -rf "$TMP_VENV"
-            if [ -d "$VENV_DIR.old" ]; then
-                mv "$VENV_DIR.old" "$VENV_DIR"
-                echo "Rolled back to previous venv." >&2
-            fi
-            exit 1
+# Roll back to the previous venv if a step fails while TMP_VENV is being
+# built.  Installed from a trap on EXIT by the venv-building functions.
+cleanup() {
+    if [ $? -ne 0 ]; then
+        echo "ERROR: Setup failed. Cleaning up..." >&2
+        rm -rf "$TMP_VENV"
+        if [ -d "$VENV_DIR.old" ]; then
+            rm -rf "$VENV_DIR"
+            mv "$VENV_DIR.old" "$VENV_DIR"
+            echo "Rolled back to previous venv." >&2
         fi
-    }
-    trap cleanup EXIT
+        exit 1
+    fi
+}
 
+# Build a fresh venv in TMP_VENV with the given pip packages, then swap
+# it into place atomically so a failed install leaves the old venv intact.
+build_venv() {
+    trap cleanup EXIT
     rm -rf "$TMP_VENV"
     python3 -m venv "$TMP_VENV"
-    "$TMP_VENV/bin/pip" install "cloakbrowser[geoip]"
-    "$TMP_VENV/bin/python" -m cloakbrowser install
+    "$TMP_VENV/bin/pip" install "$@"
+}
 
+swap_venv() {
+    rm -rf "$VENV_DIR.old"
     if [ -d "$VENV_DIR" ]; then
         mv "$VENV_DIR" "$VENV_DIR.old"
     fi
@@ -35,33 +42,19 @@ do_cloakbrowser() {
     rm -rf "$VENV_DIR.old"
 }
 
+do_cloakbrowser() {
+    build_venv "cloakbrowser[geoip]"
+    "$TMP_VENV/bin/python" -m cloakbrowser install
+    swap_venv
+}
+
 do_chromium() {
-    # Create venv with playwright if it doesn't exist.
-    # If a venv exists (e.g. from --cloakbrowser), playwright is already
-    # present as a dependency -- just download the browser binary.
+    # Create a venv with playwright if none exists.  If a venv exists
+    # (e.g. from --cloakbrowser), playwright is already present as a
+    # dependency -- just download the browser binary.
     if [ ! -d "$VENV_DIR" ]; then
-        cleanup() {
-            if [ $? -ne 0 ]; then
-                echo "ERROR: Setup failed. Cleaning up..." >&2
-                rm -rf "$TMP_VENV"
-                if [ -d "$VENV_DIR.old" ]; then
-                    mv "$VENV_DIR.old" "$VENV_DIR"
-                    echo "Rolled back to previous venv." >&2
-                fi
-                exit 1
-            fi
-        }
-        trap cleanup EXIT
-
-        rm -rf "$TMP_VENV"
-        python3 -m venv "$TMP_VENV"
-        "$TMP_VENV/bin/pip" install playwright
-
-        if [ -d "$VENV_DIR" ]; then
-            mv "$VENV_DIR" "$VENV_DIR.old"
-        fi
-        mv "$TMP_VENV" "$VENV_DIR"
-        rm -rf "$VENV_DIR.old"
+        build_venv playwright
+        swap_venv
     fi
     # Download Playwright's bundled Chromium.
     "$VENV_DIR/bin/python" -m playwright install chromium
@@ -70,52 +63,48 @@ do_chromium() {
 do_blocklist() {
     BLOCKLIST="$DATA_DIR/blocklist.txt"
     echo "Downloading ad blocklist..."
-    curl -sL "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts" \
+    curl -fsSL "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts" \
         | grep "^0\.0\.0\.0 " \
         | awk '{print $2}' \
         | sort -u > "$BLOCKLIST.tmp"
+    # A truncated download must not replace a good blocklist.
+    if [ "$(wc -l < "$BLOCKLIST.tmp")" -lt 1000 ]; then
+        rm -f "$BLOCKLIST.tmp"
+        echo "ERROR: Blocklist download looks incomplete; keeping the existing one." >&2
+        exit 1
+    fi
     mv "$BLOCKLIST.tmp" "$BLOCKLIST"
     echo "Blocklist: $(wc -l < "$BLOCKLIST") domains"
 }
 
-do_ublock() {
-    UBLOCK_DIR="$DATA_DIR/extensions/ublock"
-    echo "Fetching latest uBlock Origin release..."
-    UBLOCK_URL=$(curl -sL "https://api.github.com/repos/gorhill/uBlock/releases/latest" \
-        | grep -o '"browser_download_url": *"[^"]*chromium\.zip"' \
+# install_extension NAME LABEL REPO ASSET-SUFFIX
+# Download the latest GitHub release asset of REPO whose name ends in
+# ASSET-SUFFIX and unpack it into extensions/NAME, replacing the old
+# copy only once the new one has unpacked.
+install_extension() {
+    local name="$1" label="$2" repo="$3" suffix="$4"
+    local dir="$DATA_DIR/extensions/$name"
+    local zip="$DATA_DIR/$name.zip"
+    local tmp_dir="$dir.tmp"
+    local url
+    echo "Fetching latest $label release..."
+    url=$(curl -fsSL -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$repo/releases/latest" \
+        | grep -o "\"browser_download_url\": *\"[^\"]*$suffix\"" \
         | head -1 \
-        | cut -d'"' -f4)
-    if [ -n "$UBLOCK_URL" ]; then
-        UBLOCK_TMP="$DATA_DIR/ublock.zip"
-        curl -sL -o "$UBLOCK_TMP" "$UBLOCK_URL"
-        rm -rf "$UBLOCK_DIR"
-        mkdir -p "$UBLOCK_DIR"
-        unzip -qo "$UBLOCK_TMP" -d "$UBLOCK_DIR"
-        rm -f "$UBLOCK_TMP"
-        echo "uBlock Origin installed to $UBLOCK_DIR"
-    else
-        echo "WARNING: Could not fetch uBlock Origin release URL." >&2
+        | cut -d'"' -f4) || true
+    if [ -z "$url" ]; then
+        echo "ERROR: Could not find the $label release download URL." >&2
+        exit 1
     fi
-}
-
-do_darkreader() {
-    DARKREADER_DIR="$DATA_DIR/extensions/darkreader"
-    echo "Fetching latest Dark Reader release..."
-    DARKREADER_URL=$(curl -sL "https://api.github.com/repos/darkreader/darkreader/releases/latest" \
-        | grep -o '"browser_download_url": *"[^"]*darkreader-chrome\.zip"' \
-        | head -1 \
-        | cut -d'"' -f4)
-    if [ -n "$DARKREADER_URL" ]; then
-        DARKREADER_TMP="$DATA_DIR/darkreader.zip"
-        curl -sL -o "$DARKREADER_TMP" "$DARKREADER_URL"
-        rm -rf "$DARKREADER_DIR"
-        mkdir -p "$DARKREADER_DIR"
-        unzip -qo "$DARKREADER_TMP" -d "$DARKREADER_DIR"
-        rm -f "$DARKREADER_TMP"
-        echo "Dark Reader installed to $DARKREADER_DIR"
-    else
-        echo "WARNING: Could not fetch Dark Reader release URL." >&2
-    fi
+    curl -fsSL -o "$zip" "$url"
+    rm -rf "$tmp_dir"
+    mkdir -p "$tmp_dir"
+    unzip -qo "$zip" -d "$tmp_dir"
+    rm -f "$zip"
+    rm -rf "$dir"
+    mv "$tmp_dir" "$dir"
+    echo "$label installed to $dir"
 }
 
 case "$MODE" in
@@ -129,10 +118,10 @@ case "$MODE" in
         do_blocklist
         ;;
     --ublock)
-        do_ublock
+        install_extension ublock "uBlock Origin" gorhill/uBlock 'chromium\.zip'
         ;;
     --darkreader)
-        do_darkreader
+        install_extension darkreader "Dark Reader" darkreader/darkreader 'darkreader-chrome\.zip'
         ;;
     *)
         echo "Usage: setup.sh [--cloakbrowser|--chromium|--blocklist|--ublock|--darkreader]" >&2

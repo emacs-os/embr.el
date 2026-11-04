@@ -109,6 +109,8 @@ All management is done from Emacs, no terminal needed. CloakBrowser setup builds
 
 ### Where state is stored
 
+`~/.local/share/embr/` follows `$XDG_DATA_HOME` when that is set.
+
 | What | Path |
 |------|------|
 | Python venv | `~/.local/share/embr/.venv/` |
@@ -175,9 +177,9 @@ Canvas wins on input latency (30-35% lower at p50/p95), with zero render skips a
 | `embr-dispatch-key` | string | `"C-c"` | Key that opens the transient dispatch menu. Must be set before embr is loaded. |
 | `embr-vimium-leader` | string | `"SPC"` | Key that opens the dispatch menu in vimium normal mode. |
 | `embr-vimium-start-in-normal` | boolean | `t` | Start in normal mode when `embr-vimium-mode` is enabled. |
-| `embr-tab-bar` | boolean | `nil` | Non-nil means show a clickable tab bar above the page. Click to switch, click "x" to close. |
+| `embr-tab-bar` | boolean | `t` | Non-nil means show a clickable tab bar above the page. Click to switch, click "x" to close. |
 | `embr-home-url` | string | `"about:blank"` | URL to navigate to when embr is launched interactively. |
-| `embr-session-restore` | boolean | `nil` | Non-nil means save and restore open tabs across sessions. |
+| `embr-session-restore` | boolean | `t` | Non-nil means save and restore open tabs across sessions. The session file is updated as tabs change, so a crash loses nothing. |
 | `embr-proxy-rules` | list/nil | `nil` | Per-domain proxy routing. Each entry is `(SUFFIX TYPE ADDRESS)`. `.onion` through Tor, `.i2p` through I2P, `*` as catch-all. Generates a PAC file for Chromium. Header line shows a red "PROXY" badge when set. |
 
 
@@ -189,7 +191,7 @@ M-x embr-browse RET example.com RET
 
 ## Keybindings
 
-All keys are forwarded directly to the browser. Typing, arrows, backspace, tab, and enter work as expected. `C-x`, `M-x`, etc. stay free for Emacs. Top-level keybindings translate familiar Emacs motion keys into browser equivalents (`C-c ?` to view them all). For vim-style modal navigation, enable `embr-vimium-mode`.
+All keys are forwarded directly to the browser. Typing (including non-ASCII characters), arrows, backspace, tab, and enter work as expected. `C-x`, `M-x`, etc. stay free for Emacs. Top-level keybindings translate familiar Emacs motion keys into browser equivalents (`C-c ?` to view them all). For vim-style modal navigation, enable `embr-vimium-mode`. The mouse wheel scrolls the page vertically and, on a horizontal wheel or touchpad gesture, horizontally.
 Click the header line with mouse-1 to copy the current URL and open the `URL/Search` minibuffer prompt in one step.
 Mouse-2 opens the hovered/clicked link in a new tab. Mouse-3 opens a context menu with Open URL, Reload, Back, Forward, Download, Download URL, Print PDF, Screenshot, Reader, View text, Open in eww, View source, and Page info. Open URL navigates to the hovered/clicked link when one is present, otherwise it falls back to the normal URL/Search minibuffer prompt.
 
@@ -413,4 +415,4 @@ EXWM is X11 only. There is also an experimental Wayland equivalent in the same s
 
 Screenshots use [moody](https://github.com/tarsius/moody) for the mode line, [Aporetic Sans Mono](https://github.com/protesilaos/aporetic) for the font, and the [ef-dream](https://github.com/protesilaos/ef-themes) theme.
 
-This project was built with [Codex 5.3 Very High](https://openai.com/codex) and [Claude Opus 4.6 High Effort](https://claude.ai/code).
+This project was built with [Codex 5.3 Very High](https://openai.com/codex) and [Claude Opus 4.6 High Effort](https://claude.ai/code). A codebase-wide review and hardening pass was done with [Claude Fable 5.1 Max Effort](https://claude.ai/code).

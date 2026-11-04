@@ -6,6 +6,7 @@ import base64
 import json
 import os
 import shutil
+import signal
 import struct
 import sys
 import tempfile
@@ -19,15 +20,33 @@ if _ENGINE not in ("cloakbrowser", "chromium"):
     print(f"embr: unknown EMBR_ENGINE={_ENGINE!r}, falling back to cloakbrowser",
           file=sys.stderr)
     _ENGINE = "cloakbrowser"
-FRAME_PATH = os.path.join(
-    tempfile.gettempdir(),
-    "embr-incognito-frame.jpg" if _INCOGNITO else "embr-frame.jpg")
+# Private per-daemon runtime directory (mode 0700) for the frame file and
+# the canvas socket.  A fixed world-readable path in /tmp would expose page
+# frames to other local users, let two daemons clobber each other, and be
+# open to symlink attacks; Emacs learns the actual paths from the init
+# response.  Removed again by shutdown().
+RUNTIME_DIR = tempfile.mkdtemp(
+    prefix="embr-incognito-" if _INCOGNITO else "embr-")
+FRAME_PATH = os.path.join(RUNTIME_DIR, "frame.jpg")
+FRAME_TMP_PATH = FRAME_PATH + ".tmp"
 PERF_LOG_PATH = os.path.join(
     tempfile.gettempdir(),
     "embr-incognito-perf.jsonl" if _INCOGNITO else "embr-perf.jsonl")
 SCRIPT_DIR = Path(__file__).resolve().parent
-DATA_DIR = Path.home() / ".local" / "share" / "embr"
+# Same location setup.sh and embr.el use ($XDG_DATA_HOME/embr).
+DATA_DIR = Path(
+    os.environ.get("XDG_DATA_HOME")
+    or (Path.home() / ".local" / "share")) / "embr"
 BLOCKLIST_PATH = DATA_DIR / "blocklist.txt"
+# Drop canvas frames once this much data is queued on the socket: Emacs
+# has fallen behind and only the latest frame matters.
+FRAME_SOCKET_MAX_BUFFER = 4 * 1024 * 1024
+# URL schemes accepted verbatim; anything else gets https:// prepended.
+URL_SCHEMES = ("http://", "https://", "file://", "about:", "chrome://",
+               "chrome-extension://", "data:", "view-source:", "blob:")
+# Per-command timeouts (seconds).  First launch may download or compile.
+CMD_TIMEOUT_S = 35
+INIT_TIMEOUT_S = 120
 
 
 class PerfLog:
@@ -48,8 +67,17 @@ class PerfLog:
         self._file = None
 
     def enable(self):
+        try:
+            # O_NOFOLLOW: never write through a symlink planted at the
+            # well-known path in the shared temp directory.
+            fd = os.open(PERF_LOG_PATH,
+                         os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW,
+                         0o600)
+            self._file = os.fdopen(fd, "w", buffering=1)
+        except OSError as e:
+            print(f"embr: perf log disabled ({e})", file=sys.stderr)
+            return
         self.enabled = True
-        self._file = open(PERF_LOG_PATH, "w", buffering=1)
 
     def log(self, event, **fields):
         if not self.enabled:
@@ -140,6 +168,25 @@ def _install_proxy_extension(rules, data_dir):
     (ext_dir / "background.js").write_text(background_js)
 
 
+def _normalize_url(url):
+    """Return URL with a scheme, defaulting to https:// for bare hosts."""
+    if not isinstance(url, str):
+        raise ValueError(f"url must be a string, got {type(url).__name__}")
+    url = url.strip()
+    if not url:
+        return "about:blank"
+    if not url.startswith(URL_SCHEMES):
+        url = "https://" + url
+    return url
+
+
+def _write_frame_file(jpg_bytes):
+    """Write JPEG bytes to FRAME_PATH atomically (write tmp, then rename)."""
+    with open(FRAME_TMP_PATH, "wb") as f:
+        f.write(jpg_bytes)
+    os.replace(FRAME_TMP_PATH, FRAME_PATH)
+
+
 async def main():
     from playwright.async_api import async_playwright
     if _ENGINE == "cloakbrowser":
@@ -150,7 +197,10 @@ async def main():
     context = None
     page = None
     loop_task = None
+    metadata_task = None
     running = True
+    shutdown_done = False
+    stdout_closed = False      # set when Emacs closed our stdout
     download_expected = False  # True only during C-c d flow
     target_fps = 30
     jpeg_quality = 80
@@ -194,7 +244,7 @@ async def main():
     frame_seq = 0
     stream_id = 0
 
-    data_dir = Path.home() / ".local" / "share" / "embr"
+    data_dir = DATA_DIR
     _incognito_tmpdir = None
     if _INCOGNITO:
         _incognito_tmpdir = tempfile.mkdtemp(prefix="embr-incognito-")
@@ -228,13 +278,21 @@ async def main():
     print(f"embr: engine={_ENGINE} display={_display_mode}", file=sys.stderr)
 
     def emit(obj):
-        sys.stdout.write(json.dumps(obj) + "\n")
-        sys.stdout.flush()
+        """Write one JSON line to Emacs.
 
-    def emit_frame(obj):
-        """Emit a frame notification on stdout."""
-        sys.stdout.write(json.dumps(obj) + "\n")
-        sys.stdout.flush()
+        A broken pipe means Emacs is gone; remember that so the main
+        loop shuts the browser down instead of dying with a traceback.
+        """
+        nonlocal stdout_closed
+        if stdout_closed:
+            return
+        try:
+            sys.stdout.write(json.dumps(obj) + "\n")
+            sys.stdout.flush()
+        except (BrokenPipeError, OSError, ValueError):
+            stdout_closed = True
+
+    emit_frame = emit
 
     async def write_frame():
         """Take a JPEG screenshot, write atomically to disk, notify Emacs."""
@@ -256,10 +314,7 @@ async def main():
                 page.viewport_size["width"],
                 page.viewport_size["height"])
         else:
-            tmp = FRAME_PATH + ".tmp"
-            with open(tmp, "wb") as f:
-                f.write(jpg_bytes)
-            os.rename(tmp, FRAME_PATH)
+            _write_frame_file(jpg_bytes)
         frame_count += 1
         capture_done_mono_ms = round(t_capture_done * 1000, 2)
         emit_frame({"frame": True, "url": page.url,
@@ -281,7 +336,7 @@ async def main():
 
     async def screenshot_loop():
         """Continuously capture frames at target FPS."""
-        nonlocal mode, input_priority_until, stable_frames, adapt_cooldown
+        nonlocal mode, stable_frames, adapt_cooldown
         nonlocal target_fps, jpeg_quality
         in_priority_window = False
         while running:
@@ -302,7 +357,7 @@ async def main():
                     mode = "watch"
                     perf.log("mode_change", old_mode=old, new_mode="watch")
 
-                start = asyncio.get_event_loop().time()
+                start = time.monotonic()
                 try:
                     await write_frame()
                 except Exception as e:
@@ -353,7 +408,7 @@ async def main():
                         else:
                             stable_frames = 0
 
-                elapsed = asyncio.get_event_loop().time() - start
+                elapsed = time.monotonic() - start
                 await asyncio.sleep(max(0, (1 / target_fps) - elapsed))
             else:
                 await asyncio.sleep(0.05)
@@ -362,9 +417,8 @@ async def main():
 
     async def start_frame_socket():
         """Create a UNIX socket server for canvas frame delivery."""
-        nonlocal frame_socket_path, frame_socket_server, frame_socket_writer
-        frame_socket_path = os.path.join(
-            tempfile.gettempdir(), f"embr-canvas-{os.getpid()}.sock")
+        nonlocal frame_socket_path, frame_socket_server
+        frame_socket_path = os.path.join(RUNTIME_DIR, "canvas.sock")
         try:
             os.unlink(frame_socket_path)
         except OSError:
@@ -372,7 +426,13 @@ async def main():
 
         async def on_connect(reader, writer):
             nonlocal frame_socket_writer
+            old = frame_socket_writer
             frame_socket_writer = writer
+            if old is not None and old is not writer:
+                try:
+                    old.close()
+                except Exception:
+                    pass
             print("embr: canvas socket connected", file=sys.stderr)
 
         frame_socket_server = await asyncio.start_unix_server(
@@ -381,16 +441,25 @@ async def main():
 
     def send_frame_to_socket(jpg_bytes, width, height):
         """Write a length-prefixed JPEG frame packet to the canvas socket."""
-        nonlocal frame_seq, stream_id
+        nonlocal frame_seq
         if frame_socket_writer is None:
             return
-        frame_seq += 1
+        transport = frame_socket_writer.transport
+        if transport.is_closing():
+            return
+        # Backpressure: when Emacs has fallen behind, drop this frame
+        # instead of queueing it.  Latest wins, and an unbounded queue
+        # would only grow memory and add latency.
+        if transport.get_write_buffer_size() > FRAME_SOCKET_MAX_BUFFER:
+            perf.log("frame_drop", reason="socket_backpressure",
+                     frame_id=perf.frame_id + 1)
+            return
+        frame_seq = (frame_seq + 1) & 0xFFFFFFFF
         header = struct.pack('<IIIII', frame_seq, width, height,
                              len(jpg_bytes), stream_id)
         try:
+            # The transport flushes on its own; no per-frame drain task.
             frame_socket_writer.write(header + jpg_bytes)
-            # Schedule drain for backpressure (sync context, can't await).
-            asyncio.ensure_future(frame_socket_writer.drain())
         except Exception as e:
             print(f"embr: canvas socket write error: {e}", file=sys.stderr)
 
@@ -462,6 +531,8 @@ async def main():
     def _on_ack_done(fut):
         """Done callback for screencast frame ack futures."""
         nonlocal screencast_errors, _ack_ok_count
+        if fut.cancelled():
+            return
         exc = fut.exception()
         if not exc:
             _ack_ok_count += 1
@@ -489,14 +560,14 @@ async def main():
                 page.viewport_size["width"],
                 page.viewport_size["height"])
         else:
-            tmp = FRAME_PATH + ".tmp"
-            with open(tmp, "wb") as f:
-                f.write(jpg_bytes)
-            os.rename(tmp, FRAME_PATH)
+            _write_frame_file(jpg_bytes)
         fid = perf.next_frame_id()
         capture_done_mono_ms = round(now * 1000, 2)
         emit_frame({"frame": True, "url": page.url,
-                    "pressure": mode == "interactive",
+                    # Pressure only while an input-priority window is
+                    # open, not for the rest of the session (see
+                    # on_screencast_frame for the mode reset).
+                    "pressure": now < input_priority_until,
                     "frame_id": fid,
                     "capture_done_mono_ms": capture_done_mono_ms})
         # Perf logging (symmetric with write_frame).
@@ -528,7 +599,7 @@ async def main():
         latest wins).  Only decodes+writes+emits at frame budget
         intervals; intermediate frames are discarded unprocessed.
         """
-        nonlocal frame_count, screencast_errors
+        nonlocal frame_count, screencast_errors, mode
         nonlocal _last_screencast_frame_ts, _pending_frame_data
         try:
             frame_count += 1
@@ -541,8 +612,15 @@ async def main():
                 fut.add_done_callback(_on_ack_done)
             # Buffer raw data (latest wins, previous discarded).
             _pending_frame_data = params["data"]
-            # Throttle: only decode+write+emit at frame budget intervals.
             now = time.monotonic()
+            # The screenshot loop is what flips the scheduler back to
+            # "watch"; without it the session would stay "interactive"
+            # (and Emacs would keep its hover rate throttled) forever
+            # after the first key press.
+            if mode != "watch" and now >= input_priority_until:
+                perf.log("mode_change", old_mode=mode, new_mode="watch")
+                mode = "watch"
+            # Throttle: only decode+write+emit at frame budget intervals.
             if perf.last_frame_emit_ts is not None:
                 if (now - perf.last_frame_emit_ts) < (1.0 / target_fps):
                     perf.log("frame_drop", reason="screencast_throttle",
@@ -589,12 +667,90 @@ async def main():
 
         title_refresh_task = asyncio.create_task(_refresh())
 
+    async def _tab_list():
+        """Build the tab list for inclusion in responses."""
+        tabs = []
+        for i, p in enumerate(context.pages):
+            try:
+                t = await p.title()
+            except Exception:
+                t = ""
+            tabs.append({"index": i, "title": t, "url": p.url,
+                         "active": p is page})
+        return tabs
+
     def _on_page_crash(crashed_page=None):
-        """Log page crash."""
-        if crashed_page is not None and crashed_page != page:
+        """Log a page crash and tell Emacs when it is the active tab."""
+        if crashed_page is not None and crashed_page is not page:
             print("embr: background tab crashed (ignored)", file=sys.stderr)
             return
         print("embr: active page crashed", file=sys.stderr)
+        emit({"notice": "page crashed; reload to recover"})
+
+    def _on_page_close(closed_page=None):
+        """Adopt another tab when the active page is closed by the site.
+
+        Emacs-initiated close-tab reassigns `page' before closing, so
+        this only fires for window.close(), finished popups and the like.
+        """
+        if closed_page is page and running:
+            asyncio.ensure_future(_recover_active_page())
+
+    def _on_page_load(loaded_page=None):
+        """Re-apply per-session page state (zoom, mute) after a load.
+
+        Both live on the document and would otherwise silently reset on
+        every navigation while Emacs still shows them as active.
+        """
+        if loaded_page is not page:
+            return
+        js = []
+        if zoom_level != 1.0:
+            js.append(f"document.body.style.zoom = '{zoom_level}';")
+        if muted:
+            js.append("document.querySelectorAll('video,audio')"
+                      ".forEach(e => e.muted = true);")
+        if js:
+            asyncio.ensure_future(
+                _safe_evaluate(loaded_page, "() => {" + " ".join(js) + "}"))
+
+    async def _safe_evaluate(p, expr):
+        """Evaluate EXPR on page P, ignoring navigation/closed errors."""
+        try:
+            return await p.evaluate(expr)
+        except Exception:
+            return None
+
+    def _attach_page_handlers(p):
+        """Attach lifecycle handlers to page P (existing or future)."""
+        p.on("crash", _on_page_crash)
+        p.on("close", _on_page_close)
+        p.on("domcontentloaded", _on_page_load)
+
+    async def _recover_active_page():
+        """Make some live tab active after the active one disappeared."""
+        nonlocal page, cached_title
+        if not running or context is None:
+            return
+        live = [p for p in context.pages if not p.is_closed()]
+        if page in live:
+            return
+        if screencast_active:
+            await stop_screencast()
+        page = live[-1] if live else await context.new_page()
+        try:
+            await page.bring_to_front()
+        except Exception:
+            pass
+        err = await _restart_screencast_after_tab_change()
+        if err:
+            print(f"embr: {err['error']}", file=sys.stderr)
+        try:
+            cached_title = await page.title()
+        except Exception:
+            cached_title = ""
+        emit({"metadata": True, "url": page.url, "title": cached_title,
+              "tabs": await _tab_list()})
 
     async def _restart_screencast_after_tab_change():
         """Restart screencast on new active page after tab operation.
@@ -617,15 +773,6 @@ async def main():
     zoom_level = 1.0
     muted = False
 
-    _MOUSE_JS = """([type, x, y]) => {
-        const el = document.elementFromPoint(x, y);
-        if (!el) return;
-        const opts = {bubbles: true, cancelable: true, view: window,
-                      clientX: x, clientY: y, button: 0};
-        el.dispatchEvent(new PointerEvent(type.replace('mouse', 'pointer'), opts));
-        el.dispatchEvent(new MouseEvent(type, opts));
-    }"""
-
     _CLICK_JS = """([x, y]) => {
         const el = document.elementFromPoint(x, y);
         if (!el) return;
@@ -636,11 +783,53 @@ async def main():
         el.focus();
     }"""
 
+    async def shutdown():
+        """Stop capture, close the browser and remove runtime files.
+
+        Idempotent.  Besides the quit command this also runs when Emacs
+        disappears without sending quit (stdin EOF, broken stdout), so
+        the profile is flushed to disk and the incognito profile and the
+        runtime directory are wiped either way.
+        """
+        nonlocal running, loop_task, metadata_task, context, shutdown_done
+        if shutdown_done:
+            return
+        shutdown_done = True
+        running = False
+        if screencast_active:
+            await stop_screencast()
+        for task in (loop_task, metadata_task):
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
+        loop_task = None
+        metadata_task = None
+        await stop_frame_socket()
+        if context:
+            try:
+                await asyncio.wait_for(context.close(), timeout=15)
+            except Exception as e:
+                print(f"embr: browser close failed: {e}", file=sys.stderr)
+            context = None
+        try:
+            await asyncio.wait_for(pw.stop(), timeout=15)
+        except Exception as e:
+            print(f"embr: playwright stop failed: {e}", file=sys.stderr)
+        perf.close()
+        shutil.rmtree(RUNTIME_DIR, ignore_errors=True)
+        if _INCOGNITO and _incognito_tmpdir:
+            shutil.rmtree(_incognito_tmpdir, ignore_errors=True)
+            print("embr: incognito profile wiped", file=sys.stderr)
+
     async def handle(cmd, params):
-        nonlocal context, page, running, loop_task, target_fps, jpeg_quality, cached_title
+        nonlocal context, page, loop_task, target_fps, jpeg_quality, cached_title
         nonlocal input_priority_window_s, frame_source, render_backend
         nonlocal adaptive_enabled, fps_min, fps_max, quality_min, quality_max
-        nonlocal zoom_level, muted
+        nonlocal zoom_level, muted, mouse_move_task, download_expected
+        nonlocal last_rendered_frame_id, metadata_task
 
         if cmd == "init":
             # Validate frame_source and render_backend before any heavy work.
@@ -704,10 +893,10 @@ async def main():
                 print(f"embr: proxy extension ({len(proxy_rules)} rules)",
                       file=sys.stderr)
             context = await pw.chromium.launch_persistent_context(**context_opts)
-            # Attach crash handler to every page (existing and future).
+            # Attach lifecycle handlers to every page (existing and future).
             for p in context.pages:
-                p.on("crash", _on_page_crash)
-            context.on("page", lambda p: p.on("crash", _on_page_crash))
+                _attach_page_handlers(p)
+            context.on("page", _attach_page_handlers)
 
             # Cancel unsolicited downloads (only C-c d sets download_expected).
             async def _on_download(download):
@@ -717,21 +906,32 @@ async def main():
             # Ad blocking via request interception.
             blocked = load_blocklist()
             if blocked:
+                host_cache = {}
+
                 def is_blocked(host):
                     """Check host and all parent domains against blocklist."""
-                    parts = host.split(".")
-                    for i in range(len(parts)):
-                        if ".".join(parts[i:]) in blocked:
-                            return True
-                    return False
+                    hit = host_cache.get(host)
+                    if hit is None:
+                        parts = host.split(".")
+                        hit = any(".".join(parts[i:]) in blocked
+                                  for i in range(len(parts)))
+                        if len(host_cache) > 4096:
+                            host_cache.clear()
+                        host_cache[host] = hit
+                    return hit
 
                 async def block_ads(route):
                     host = urlparse(route.request.url).hostname or ""
-                    if is_blocked(host):
-                        await route.abort()
-                    else:
-                        await route.continue_()
+                    try:
+                        if is_blocked(host):
+                            await route.abort()
+                        else:
+                            await route.continue_()
+                    except Exception:
+                        pass  # Request already gone (navigation aborted).
                 await context.route("**/*", block_ads)
+                print(f"embr: blocklist loaded ({len(blocked)} domains)",
+                      file=sys.stderr)
             # Fake caret: CDP screenshots don't capture the native caret.
             # Inject a DOM element that polls cursor position in focused inputs.
             dom_caret = params.get("dom_caret", False)
@@ -867,18 +1067,31 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
                 tick = 0
                 # Cache background tab signatures for change detection.
                 _bg_sigs = {}  # id(page) -> (url, title)
-                while running and page and not page.is_closed():
+                while running:
+                    p = page
+                    if p is None or p.is_closed():
+                        # Between a tab being closed and its successor
+                        # being picked; never exit the loop for it, or
+                        # Emacs would stop getting URL/title updates for
+                        # the rest of the session.
+                        await asyncio.sleep(0.5)
+                        continue
                     try:
-                        url = page.url
-                        title = await page.title()
+                        url = p.url
+                        title = await p.title()
                     except Exception:
                         await asyncio.sleep(1)
                         continue
+                    if p is not page:
+                        continue  # Tab switched while awaiting.
                     changed = False
                     if url != _last_nav_url:
                         _last_nav_url = url
                         changed = True
-                    if title and title != cached_title:
+                    if title != cached_title:
+                        # An empty title is a real change too (about:blank
+                        # after a titled page), otherwise the old title
+                        # would stick to the new page.
                         cached_title = title
                         changed = True
                     # Every 4th tick (~2s), poll all tab titles so inactive
@@ -895,8 +1108,8 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
                                 t = ""
                             entries.append({"index": i, "title": t,
                                             "url": p.url,
-                                            "active": p == page})
-                            if p != page:
+                                            "active": p is page})
+                            if p is not page:
                                 sig = (p.url, t)
                                 if _bg_sigs.get(id(p)) != sig:
                                     _bg_sigs[id(p)] = sig
@@ -911,7 +1124,7 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
                         emit(msg)
                     await asyncio.sleep(0.5)
 
-            asyncio.ensure_future(_metadata_loop())
+            metadata_task = asyncio.ensure_future(_metadata_loop())
 
             # Start frame capture (frame_source validated at top of init).
             active_source = frame_source
@@ -930,9 +1143,9 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
             # Start canvas frame socket if requested.
             if render_backend == "canvas":
                 await start_frame_socket()
-                print(f"embr: render_backend=canvas", file=sys.stderr)
+                print("embr: render_backend=canvas", file=sys.stderr)
             else:
-                print(f"embr: render_backend=default", file=sys.stderr)
+                print("embr: render_backend=default", file=sys.stderr)
             perf.source = active_source
             resp = {"ok": True, "frame_path": FRAME_PATH,
                     "frame_source": active_source,
@@ -946,9 +1159,7 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
             return {"error": "not initialized — send init first"}
 
         if cmd == "navigate":
-            url = params["url"]
-            if not url.startswith(("http://", "https://", "file://", "about:", "chrome://")):
-                url = "https://" + url
+            url = _normalize_url(params.get("url", ""))
             try:
                 await page.goto(url, wait_until="domcontentloaded", timeout=10000)
             except Exception:
@@ -961,7 +1172,6 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
             # Drop hover during input-priority window.
             if time.monotonic() < input_priority_until:
                 return {"ok": True}
-            nonlocal mouse_move_task
             if mouse_move_task and not mouse_move_task.done():
                 mouse_move_task.cancel()
             async def _move(x, y):
@@ -977,7 +1187,6 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
         # Emacs echoes capture_done_mono_ms (daemon monotonic) back so we
         # compute staleness entirely within the daemon's monotonic clock.
         if cmd == "frame_rendered":
-            nonlocal last_rendered_frame_id
             fid = params.get("frame_id", 0)
             capture_mono = params.get("capture_done_mono_ms", 0)
             now_mono_ms = round(time.monotonic() * 1000, 2)
@@ -1075,7 +1284,12 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
                     pass
             if screencast_active:
                 await stop_screencast()
-                await start_screencast()
+                try:
+                    await start_screencast()
+                except Exception as e:
+                    return {"error": f"screencast restart failed: {e}",
+                            "width": new_w, "height": new_h,
+                            "stream_id": stream_id}
             return {"ok": True, "width": new_w, "height": new_h,
                     "stream_id": stream_id}
 
@@ -1136,7 +1350,6 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
             return {"ok": True, "href": href}
 
         if cmd == "download":
-            nonlocal download_expected
             url = params["url"]
             directory = params["directory"]
             try:
@@ -1152,7 +1365,10 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
                         a.remove();
                     }""", url)
                 download = await dl_info.value
-                filename = download.suggested_filename
+                # The suggested name comes from the server; never let it
+                # escape the download directory.
+                filename = os.path.basename(
+                    download.suggested_filename or "") or "download"
                 save_path = os.path.join(directory, filename)
                 # Deduplicate filename if it already exists.
                 base, ext = os.path.splitext(save_path)
@@ -1203,19 +1419,12 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
             await page.select_option(params["selector"], params["value"])
             return {"ok": True}
 
-        async def _tab_list():
-            """Build tab list for inclusion in responses."""
-            tabs = []
-            for i, p in enumerate(context.pages):
-                try:
-                    t = await p.title()
-                except Exception:
-                    t = ""
-                tabs.append({"index": i, "title": t, "url": p.url,
-                             "active": p == page})
-            return tabs
-
         if cmd == "new-tab":
+            url = _normalize_url(params.get("url", "about:blank"))
+            # wait=false (session restore) opens the tab without waiting
+            # for the load, so restoring many tabs is not serialized on
+            # slow sites.
+            wait = params.get("wait", True) is not False
             if screencast_active:
                 await stop_screencast()
             # Capture current viewport before page changes.
@@ -1227,12 +1436,25 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
                     await new_page.set_viewport_size(vp)
                 except Exception:
                     pass
-            url = params.get("url", "about:blank")
-            if url != "about:blank" and not url.startswith(("http://", "https://", "file://", "chrome://")):
-                url = "https://" + url
-            if url != "about:blank":
-                await new_page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            # Make the new tab active before navigating, so a failed or
+            # slow load (DNS error, timeout) cannot leave the screencast
+            # stopped with the old page still selected.
             page = new_page
+            if url != "about:blank":
+                nav = new_page.goto(url, wait_until="domcontentloaded",
+                                    timeout=15000)
+                if wait:
+                    try:
+                        await nav
+                    except Exception:
+                        pass  # Nav error; page state visible via frames.
+                else:
+                    async def _bg_goto(coro):
+                        try:
+                            await coro
+                        except Exception:
+                            pass
+                    asyncio.ensure_future(_bg_goto(nav))
             err = await _restart_screencast_after_tab_change()
             if err:
                 return err
@@ -1240,7 +1462,7 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
                 cached_title = await page.title()
             except Exception:
                 pass
-            return {"ok": True, "tab_index": len(context.pages) - 1,
+            return {"ok": True, "tab_index": context.pages.index(page),
                     "url": page.url, "title": cached_title,
                     "stream_id": stream_id,
                     "tabs": await _tab_list()}
@@ -1250,23 +1472,33 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
                 return {"last_tab": True}
             target_idx = params.get("index")
             target = (context.pages[target_idx]
-                      if target_idx is not None and 0 <= target_idx < len(context.pages)
+                      if isinstance(target_idx, int)
+                      and 0 <= target_idx < len(context.pages)
                       else page)
-            if screencast_active:
-                await stop_screencast()
-            was_active = (target == page)
+            was_active = target is page
+            if was_active:
+                if screencast_active:
+                    await stop_screencast()
+                # Pick the successor before closing, so neither the
+                # metadata loop nor the close handler ever sees a closed
+                # active page.  Like a browser, activate the neighbour
+                # that takes the closed tab's place (or the new last).
+                remaining = [p for p in context.pages if p is not target]
+                page = remaining[min(context.pages.index(target),
+                                     len(remaining) - 1)]
             await target.close()
             if was_active:
-                page = context.pages[-1]
-            await page.bring_to_front()
-            err = await _restart_screencast_after_tab_change()
-            if err:
-                return err
+                await page.bring_to_front()
+                err = await _restart_screencast_after_tab_change()
+                if err:
+                    return err
             try:
                 cached_title = await page.title()
             except Exception:
                 pass
-            return {"ok": True, "tab_index": len(context.pages) - 1,
+            return {"ok": True,
+                    "tab_index": (context.pages.index(page)
+                                  if page in context.pages else 0),
                     "url": page.url, "title": cached_title,
                     "stream_id": stream_id,
                     "tabs": await _tab_list()}
@@ -1275,8 +1507,8 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
             return {"ok": True, "tabs": await _tab_list()}
 
         if cmd == "switch-tab":
-            idx = params["index"]
-            if 0 <= idx < len(context.pages):
+            idx = params.get("index")
+            if isinstance(idx, int) and 0 <= idx < len(context.pages):
                 if screencast_active:
                     await stop_screencast()
                 page = context.pages[idx]
@@ -1436,47 +1668,34 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
             return {"ok": True, "url": url, "title": cached_title}
 
         if cmd == "quit":
-            running = False
-            if screencast_active:
-                await stop_screencast()
-            if loop_task:
-                loop_task.cancel()
-                try:
-                    await loop_task
-                except asyncio.CancelledError:
-                    pass
-            await stop_frame_socket()
-            if context:
-                await context.close()
-            await pw.stop()
-            perf.close()
-            try:
-                os.unlink(FRAME_PATH)
-            except OSError:
-                pass
-            # Clean up incognito temp profile.
-            if _INCOGNITO and _incognito_tmpdir:
-                try:
-                    shutil.rmtree(_incognito_tmpdir)
-                    print(f"embr: incognito profile wiped", file=sys.stderr)
-                except OSError:
-                    pass
+            await shutdown()
             return None  # signals exit
 
         return {"error": f"unknown command: {cmd}"}
 
     reader = asyncio.StreamReader()
     protocol = asyncio.StreamReaderProtocol(reader)
-    await asyncio.get_event_loop().connect_read_pipe(lambda: protocol, sys.stdin)
+    loop = asyncio.get_running_loop()
+    await loop.connect_read_pipe(lambda: protocol, sys.stdin)
 
-    while True:
+    # Emacs hangs up on its subprocesses when it exits, and a terminal
+    # or service manager sends SIGTERM.  Treat both like end of input
+    # so the browser is closed and runtime files removed instead of
+    # dying mid-flight.
+    for sig in (signal.SIGHUP, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, reader.feed_eof)
+        except (NotImplementedError, RuntimeError, ValueError):
+            pass
+
+    while not stdout_closed:
         line = await reader.readline()
         if not line:
-            break
+            break  # Emacs closed the pipe (killed, or quit without "quit").
 
         # Batch-read: collect this line plus any already buffered.
         pending = [line]
-        while b'\n' in reader._buffer:
+        while b'\n' in getattr(reader, "_buffer", b""):
             pending.append(await reader.readline())
 
         # Parse all pending lines; coalesce consecutive mousemoves so they
@@ -1506,8 +1725,15 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
 
         should_exit = False
         for msg in commands:
+            if not isinstance(msg, dict):
+                emit({"error": "invalid command: expected a JSON object"})
+                continue
             cmd = msg.get("cmd", "")
-            params = {k: v for k, v in msg.items() if k != "cmd"}
+            # Optional request id, echoed in the response so Emacs can
+            # match it to the right callback even when fire-and-forget
+            # traffic (hover, resize, frame acks) is interleaved.
+            rid = msg.get("id")
+            params = {k: v for k, v in msg.items() if k not in ("cmd", "id")}
             cid = perf.next_cmd_id()
             perf.log("cmd_receive", cmd=cmd, cmd_id=cid)
             if cmd in PerfLog.INTERACTIVE_CMDS:
@@ -1525,7 +1751,9 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
                     perf.log("mode_change", old_mode=old, new_mode="interactive")
             t0 = time.monotonic()
             try:
-                resp = await asyncio.wait_for(handle(cmd, params), timeout=35)
+                resp = await asyncio.wait_for(
+                    handle(cmd, params),
+                    timeout=INIT_TIMEOUT_S if cmd == "init" else CMD_TIMEOUT_S)
             except asyncio.TimeoutError:
                 resp = {"error": f"command timed out: {cmd}"}
             except Exception as e:
@@ -1533,11 +1761,17 @@ else document.addEventListener('DOMContentLoaded', embrStartLinkStatus);
             if resp is None:
                 should_exit = True
                 break
+            if rid is not None:
+                resp["id"] = rid
             emit(resp)
             latency_ms = round((time.monotonic() - t0) * 1000, 2)
             perf.log("cmd_ack", cmd=cmd, cmd_id=cid, latency_ms=latency_ms)
         if should_exit:
             break
+
+    # Reached after quit, on stdin EOF, or once stdout broke: close the
+    # browser and remove runtime files whichever way we got here.
+    await shutdown()
 
 
 if __name__ == "__main__":

@@ -172,7 +172,7 @@ def analyze_source(events, source_label, out=None):
         total_err = max(ack_err_vals) if ack_err_vals else 0
         total_acks = total_ok + total_err
         err_rate = total_err / total_acks if total_acks > 0 else 0
-        p(f"\n  Ack health (screencast)")
+        p("\n  Ack health (screencast)")
         p(f"    ack_ok:     {total_ok}")
         p(f"    ack_errors: {total_err}")
         p(f"    error_rate: {err_rate:.4%}")
@@ -245,7 +245,7 @@ def print_screencast_health(events, out=None):
         p("\n  Screencast health: clean (no errors/fallbacks/stalls)")
         return
 
-    p(f"\n  Screencast health:")
+    p("\n  Screencast health:")
     p(f"    ack_errors:         {len(ack_errors)}")
     p(f"    stall_starts:       {len(stall_starts)}")
     p(f"    stall_ends:         {len(stall_ends)}")
@@ -269,7 +269,7 @@ def print_summary(events, path=None, out=None):
     versions = {e.get("schema_version", 1) for e in events}
     sources = {e.get("frame_source", "screenshot") for e in events}
 
-    p(f"\n  Summary")
+    p("\n  Summary")
     if path:
         p(f"    Log:             {path}")
     p(f"    Schema versions: {sorted(versions)}")
@@ -301,7 +301,7 @@ def run_single_report(events, path=None, warmup_ms=0, out=None):
         sources.setdefault(src, []).append(e)
 
     p("=" * 60)
-    p(f"  embr performance report")
+    p("  embr performance report")
     if path:
         p(f"  log: {path}")
     p(f"  sources: {', '.join(sorted(sources))}")

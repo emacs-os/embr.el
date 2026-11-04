@@ -17,11 +17,13 @@ Emacs (embr.el) ←→ JSON over stdin/stdout ←→ Python daemon (embr.py)
   Canvas or JPEG rendering                    JPEG frames → file or Unix socket
 ```
 
-**embr.el** (~2200 lines): Emacs Lisp major mode. Process management, async JSON protocol, two render backends (default + canvas), two frame sources (screencast + screenshot), link hints, tabs, bookmarks, zoom, mute, reader mode, page info, incognito mode.
+**embr.el** (~3900 lines): Emacs Lisp major mode. Process management, async JSON protocol, two render backends (default + canvas), two frame sources (screencast + screenshot), link hints, tabs, bookmarks, zoom, mute, reader mode, page info, incognito mode.
 
-**embr.py** (~1350 lines): asyncio daemon using CloakBrowser (Playwright API). Browser commands, CDP screencast, screenshot capture loop, canvas frame socket, domain-level ad blocking, extension loading (uBlock Origin, Dark Reader), incognito temp profiles.
+**embr.py** (~1800 lines): asyncio daemon using CloakBrowser (Playwright API). Browser commands, CDP screencast, screenshot capture loop, canvas frame socket, domain-level ad blocking, extension loading (uBlock Origin, Dark Reader), incognito temp profiles.
 
-**setup.sh** (~110 lines): Creates Python venv at `~/.local/share/embr/.venv/`, installs `cloakbrowser[geoip]`, downloads browser. Separate flags for blocklist, uBlock Origin, and Dark Reader (downloaded from GitHub releases API). Builds in temp venv and swaps atomically.
+**native/embr-canvas.c** (~400 lines): Emacs dynamic module for the canvas backend. Decodes JPEG frames with libjpeg-turbo straight into the Emacs 32 canvas pixel buffer (ARGB32), taking the canvas size from the image spec.
+
+**setup.sh** (~140 lines): Creates Python venv at `$XDG_DATA_HOME/embr/.venv/` (default `~/.local/share/embr/.venv/`), installs `cloakbrowser[geoip]`, downloads browser. Separate flags for blocklist, uBlock Origin, and Dark Reader (downloaded from GitHub releases API). Builds in temp venv and swaps atomically; downloads fail loudly rather than replacing a good file with a truncated one.
 
 ## Frame Pipeline
 
@@ -32,15 +34,15 @@ Two frame sources (`embr-frame-source`):
 
 Two render backends (`embr-render-backend`):
 
-- **`'default`**: Python writes JPEG to a temp file (`/tmp/embr-frame.jpg`), renames atomically. Emacs reads the file via `insert-file-contents-literally` and displays with `create-image`. Render timer batches frames.
-- **`'canvas`**: Python sends JPEG bytes over a Unix socket with a binary header (seq, width, height, length). Emacs native C module (`embr-canvas-blit-jpeg`) decodes and blits directly to a canvas pixel buffer, then calls `canvas-refresh`. Requires Emacs 32+ (native canvas images). `embr-render-backend` defaults to `'auto` (`'default` behaves identically): `embr--canvas-probe` (Emacs support, module build, module load, smoke blit) decides once per session and `embr--select-backend` falls back to the JPEG file backend with a one-time notice.
+- **`'default`**: Python writes JPEG to `frame.jpg` in a private per-daemon runtime directory (`tempfile.mkdtemp`, mode 0700; the path comes back in the init response as `frame_path`), renames atomically. Emacs reads the file via `insert-file-contents-literally` and displays with `create-image` at `:scale 1`, flushing the previous frame from the image cache. A one-shot render timer is armed only while a frame is pending, rate-limited to `embr-fps`.
+- **`'canvas`**: Python sends JPEG bytes over a Unix socket in the same runtime directory, with a 20-byte binary header (seq, width, height, length, stream id). Emacs native C module (`embr-canvas-blit-jpeg CANVAS JPEG-DATA`) decodes directly into the canvas pixel buffer (clipping to the canvas size read from the spec's `:data-width`/`:data-height`, black-filling the rest), then calls `canvas-refresh`. Requires Emacs 32+ (native canvas images). `embr-render-backend` defaults to `'auto` (`'default` behaves identically): `embr--canvas-probe` (Emacs support, module build, module load, smoke blit) decides once per session and `embr--select-backend` falls back to the JPEG file backend with a one-time notice.
 
 ## Buffer-Local State and Multi-Session
 
 All per-session state is buffer-local in `embr-mode`. This enables normal + incognito sessions running simultaneously in separate buffers with separate daemon processes.
 
 Key patterns:
-- `embr--process`, `embr--callback`, `embr--frame-path`, `embr--active-backend`, all timers, all canvas state are buffer-local (set via `setq-local` in `embr-mode`)
+- `embr--process`, `embr--pending-callbacks`, `embr--frame-path`, `embr--active-backend`, all timers, all canvas state are buffer-local (set via `setq-local` in `embr-mode`)
 - Process filter (`embr--process-filter`) routes output to the correct buffer via `(process-get proc 'embr-buffer)` + `with-current-buffer`
 - Canvas socket filter (`embr--canvas-socket-filter`) uses the same routing pattern
 - Hover and render timers capture the owning buffer in a closure at creation time and use `with-current-buffer` in the tick function
@@ -51,8 +53,9 @@ Incognito mode (`embr-browse-incognito`) uses the same `embr-mode` with `embr--i
 
 ## Key Design Patterns
 
-- **JSON line protocol**: Each message is a single JSON line. Commands from Emacs have a `cmd` field. Responses include `url`, `title`, and optionally `error`. Use `json-serialize` / `json-parse-string` (Emacs 30.1+ native C JSON, not the old `json.el`).
-- **Frame batching**: Process filter stashes latest frame in `embr--pending-frame`. Render timer picks it up, skipping intermediate frames if Emacs can't keep up.
+- **JSON line protocol**: Each message is a single JSON line. Commands from Emacs have a `cmd` field and an `id` that the daemon echoes in the response, so `embr--send` can hold several callbacks in flight (`embr--pending-callbacks`) while fire-and-forget traffic (hover, frame acks) is interleaved. Responses include `url`, `title`, and optionally `error`. Use `json-serialize` / `json-parse-string` (Emacs 30.1+ native C JSON, not the old `json.el`).
+- **Frame batching**: Process filter stashes latest frame in `embr--pending-frame` and arms a one-shot render timer (`embr--render-schedule`, rate-limited to `embr-fps`). The tick picks up the latest frame, skipping intermediate frames if Emacs can't keep up; an idle session has no periodic timer.
+- **Sessions persist on change**: `embr--save-session` runs from every tab-list update and URL change (deduplicated against the last write) and removes the file when the last tab is closed; `embr--restore-session` keeps the file. Saving starts only once `embr--session-loaded` is set, because the init response already carries the daemon's blank tab.
 - **Async with callbacks**: `embr--send` dispatches commands with optional callback. `embr--send-sync` blocks via `accept-process-output` for synchronous results.
 - **Dual click modes**: `atomic` defers mousedown until drag is detected (better iframe compat); `immediate` sends mousedown instantly.
 - **Ad blocking**: Domain-level route interception from blocklist.txt (~82K domains).
