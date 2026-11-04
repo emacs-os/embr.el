@@ -364,11 +364,11 @@ Headless Chromium does not render scroll bars. Setting `embr-display-method` to 
 
 ### Does this work on macOS?
 
-Unknown. Let us know.
+Yes. It has been [reported to work on macOS](https://github.com/emacs-os/embr.el/issues/9).
 
 ### Windows?
 
-No.
+Yes, it has been known to work under WSL with `emacs-pgtk`, but it is not recommended. The overhead of running in a virtualized environment makes it too slow for a good experience.
 
 ### Can I install other Chromium extensions?
 
