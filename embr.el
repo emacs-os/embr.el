@@ -37,6 +37,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'comint)
 (require 'image)
 (require 'shr)
 (require 'transient)
@@ -404,28 +405,38 @@ binary are installed."
         (_ t))))
 
 (defun embr--run-setup (args msg)
-  "Run setup.sh with ARGS and display MSG on completion."
-  (let ((setup-script (expand-file-name "setup.sh" embr--directory)))
+  "Run setup.sh with ARGS and display MSG on completion.
+The script runs in a `comint-mode' buffer, so any prompt it (or a
+tool it calls, such as the CloakBrowser installer) shows can be
+answered by typing at the end of the buffer and pressing RET."
+  (let ((setup-script (expand-file-name "setup.sh" embr--directory))
+        (buf (get-buffer-create "*embr-setup*")))
     (unless (file-exists-p setup-script)
       (error "embr: setup.sh not found in %s" embr--directory))
-    (let ((buf (get-buffer-create "*embr-setup*")))
-      (with-current-buffer buf (erase-buffer))
+    (when (comint-check-proc buf)
       (pop-to-buffer buf)
+      (user-error "embr: setup.sh is already running in %s" (buffer-name buf)))
+    (with-current-buffer buf
+      (let ((inhibit-read-only t))
+        (erase-buffer))
+      (comint-mode)
       (insert (format "Running setup.sh %s ...\n\n" (string-join args " ")))
-      (let ((proc (apply #'start-process "embr-setup" buf
-                          "bash" setup-script args)))
-        (set-process-sentinel
-         proc
-         (lambda (proc event)
-           (when (and (not (process-live-p proc))
-                      (buffer-live-p buf))
-             (with-current-buffer buf
-               (goto-char (point-max))
-               (insert (if (string-match-p "finished" event)
-                           (format "\n%s\n" msg)
-                         (format "\nembr: setup.sh %s failed: %s\n"
-                                 (string-join args " ")
-                                 (string-trim event))))))))))))
+      (apply #'make-comint-in-buffer "embr-setup" buf
+             "bash" nil setup-script args))
+    (pop-to-buffer buf)
+    (set-process-sentinel
+     (get-buffer-process buf)
+     (lambda (proc event)
+       (when (and (not (process-live-p proc))
+                  (buffer-live-p buf))
+         (with-current-buffer buf
+           (let ((inhibit-read-only t))
+             (goto-char (point-max))
+             (insert (if (string-match-p "finished" event)
+                         (format "\n%s\n" msg)
+                       (format "\nembr: setup.sh %s failed: %s\n"
+                               (string-join args " ")
+                               (string-trim event)))))))))))
 
 ;;;###autoload
 (defun embr-install-or-update-cloakbrowser ()
